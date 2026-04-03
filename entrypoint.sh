@@ -15,15 +15,21 @@ done
 sleep 2
 echo "Database is ready"
 
-# Push schema with --force to skip interactive prompts
-echo "Syncing database schema..."
-echo "yes" | NODE_PATH=/app/tooling_modules npx drizzle-kit push --force 2>&1 || echo "Schema push completed (may have warnings)"
+# Schema push + seed using tooling_modules as node_modules
+# Create a symlink so require() resolution works naturally
+if [ -d /app/tooling_modules ] && [ ! -L /app/tool_node_modules ]; then
+  ln -sf /app/tooling_modules /app/tool_node_modules
+fi
 
-# Seed if the members table is empty
+# Push schema
+echo "Syncing database schema..."
+cd /app && echo "yes" | node_modules=tooling_modules PATH="/app/tooling_modules/.bin:$PATH" NODE_PATH=/app/tooling_modules /app/tooling_modules/.bin/drizzle-kit push --force 2>&1 || echo "Schema push completed with warnings"
+
+# Check if seed is needed and run it
 echo "Checking if seed is needed..."
 MEMBER_COUNT=$(NODE_PATH=/app/tooling_modules node -e "
-  var p = require('postgres');
-  var sql = p(process.env.DATABASE_URL);
+  var p = require('/app/tooling_modules/postgres/cjs/src/index.js');
+  var sql = p.default(process.env.DATABASE_URL);
   sql.unsafe('SELECT count(*)::int as c FROM information_schema.tables WHERE table_name = \'members\'')
     .then(function(r) {
       if (r[0].c === 0) { console.log('0'); return sql.end(); }
@@ -34,7 +40,7 @@ MEMBER_COUNT=$(NODE_PATH=/app/tooling_modules node -e "
 
 if [ "$MEMBER_COUNT" = "0" ] || [ -z "$MEMBER_COUNT" ]; then
   echo "Seeding database..."
-  NODE_PATH=/app/tooling_modules npx tsx src/db/seed.ts 2>&1 || echo "Seed skipped"
+  NODE_PATH=/app/tooling_modules /app/tooling_modules/.bin/tsx src/db/seed.ts 2>&1 || echo "Seed skipped"
 else
   echo "Database has $MEMBER_COUNT members, skipping seed"
 fi
