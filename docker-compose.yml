@@ -1,16 +1,33 @@
 services:
-  postgres:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xchangemakers-app
+    restart: unless-stopped
+    ports:
+      - '3100:3000'
+    environment:
+      - DATABASE_URL=postgresql://xchangemakers:xchangemakers@db:5432/xchangemakers
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
     image: postgres:16-alpine
     container_name: xchangemakers-db
     restart: unless-stopped
-    ports:
-      - '5433:5432'
     environment:
       POSTGRES_USER: xchangemakers
       POSTGRES_PASSWORD: xchangemakers
       POSTGRES_DB: xchangemakers
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U xchangemakers']
+      interval: 3s
+      timeout: 3s
+      retries: 10
 
 volumes:
   pgdata:
