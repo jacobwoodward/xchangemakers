@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { exchangeEngine } from '@/lib/exchange-engine/client'
 import { TrailProgress } from '@/components/onboarding/trail-progress'
 import { OnboardingTrailClient } from './trail-client'

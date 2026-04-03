@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { exchangeEngine } from '@/lib/exchange-engine'
 import { PageHeader } from '@/components/shared/page-header'
 import { PageTransition } from '@/components/shared/page-transition'

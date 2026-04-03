@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { exchangeEngine } from '@/lib/exchange-engine'
 import { PageTransition } from '@/components/shared/page-transition'
 import { ActivityList } from '@/components/activity/activity-list'

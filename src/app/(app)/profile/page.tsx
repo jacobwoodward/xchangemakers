@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
 import { exchangeEngine } from '@/lib/exchange-engine'
 import { PageTransition } from '@/components/shared/page-transition'
