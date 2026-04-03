@@ -4,10 +4,7 @@
  * Runs schema creation + seed data in pure Node.js CJS.
  */
 
-// Try multiple paths for the postgres module (standalone vs tooling)
-let postgres;
-try { postgres = require('/app/tooling_modules/postgres/cjs/src/index.js').default; }
-catch { try { postgres = require('postgres'); } catch { console.error('Cannot find postgres module'); process.exit(1); } }
+const postgres = require('postgres');
 
 const sql = postgres(process.env.DATABASE_URL);
 

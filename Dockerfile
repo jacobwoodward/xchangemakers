@@ -30,7 +30,10 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Copy db-init script (pure Node.js, uses postgres from standalone node_modules)
+# Install postgres package (serverExternalPackages excludes it from standalone bundle)
+RUN npm install postgres@3.4.5 --no-save 2>/dev/null
+
+# Copy db-init script (pure Node.js CJS)
 COPY db-init.js ./
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
