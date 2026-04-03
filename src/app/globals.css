@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Primary palette */
+  --color-primary: var(--xm-primary);
+  --color-primary-light: var(--xm-primary-light);
+  --color-primary-dark: var(--xm-primary-dark);
+  --color-primary-foreground: var(--xm-primary-foreground);
+
+  /* Accent palette */
+  --color-accent: var(--xm-accent);
+  --color-accent-light: var(--xm-accent-light);
+  --color-accent-dark: var(--xm-accent-dark);
+  --color-accent-foreground: var(--xm-accent-foreground);
+
+  /* Text colors */
+  --color-heading: var(--xm-text-heading);
+  --color-body: var(--xm-text-body);
+  --color-secondary: var(--xm-text-secondary);
+  --color-muted: var(--xm-text-muted);
+
+  /* Background colors */
+  --color-page: var(--xm-bg-page);
+  --color-surface: var(--xm-bg-surface);
+  --color-hover: var(--xm-bg-hover);
+  --color-active: var(--xm-bg-active);
+
+  /* Border colors */
+  --color-border: var(--xm-border);
+  --color-border-light: var(--xm-border-light);
+
+  /* Semantic colors */
+  --color-success: var(--xm-success);
+  --color-warning: var(--xm-warning);
+  --color-error: var(--xm-error);
+  --color-info: var(--xm-info);
+
+  /* Border radius */
+  --radius-sm: var(--xm-radius-sm);
+  --radius-default: var(--xm-radius-default);
+  --radius-md: var(--xm-radius-md);
+  --radius-lg: var(--xm-radius-lg);
+  --radius-xl: var(--xm-radius-xl);
+  --radius-full: var(--xm-radius-full);
+
+  /* Shadows */
+  --shadow-sm: var(--xm-shadow-sm);
+  --shadow-default: var(--xm-shadow-default);
+  --shadow-md: var(--xm-shadow-md);
+  --shadow-lg: var(--xm-shadow-lg);
+  --shadow-card: var(--xm-shadow-card);
+
+  /* Typography */
+  --font-sans: var(--xm-font-sans);
+
+  /* Transitions */
+  --transition-fast: var(--xm-transition-fast);
+  --transition-normal: var(--xm-transition-normal);
+  --transition-slow: var(--xm-transition-slow);
+}
+
+:root {
+  /* Primary */
+  --xm-primary: #5B8C5A;
+  --xm-primary-light: #7BAF7A;
+  --xm-primary-dark: #4A7249;
+  --xm-primary-foreground: #FFFFFF;
+
+  /* Accent */
+  --xm-accent: #E8A849;
+  --xm-accent-light: #F0C078;
+  --xm-accent-dark: #D4923A;
+  --xm-accent-foreground: #FFFFFF;
+
+  /* Text */
+  --xm-text-heading: #2D2A26;
+  --xm-text-body: #4A4540;
+  --xm-text-secondary: #6B6560;
+  --xm-text-muted: #9B9590;
+
+  /* Backgrounds */
+  --xm-bg-page: #FAFAF7;
+  --xm-bg-surface: #FFFFFF;
+  --xm-bg-hover: #F5F3EF;
+  --xm-bg-active: #EBE8E3;
+
+  /* Borders */
+  --xm-border: #E8E4DE;
+  --xm-border-light: #F2EFEA;
+
+  /* Semantic */
+  --xm-success: #5B8C5A;
+  --xm-warning: #E8A849;
+  --xm-error: #D9534F;
+  --xm-info: #5B9BD5;
+
+  /* Radius */
+  --xm-radius-sm: 6px;
+  --xm-radius-default: 10px;
+  --xm-radius-md: 12px;
+  --xm-radius-lg: 16px;
+  --xm-radius-xl: 20px;
+  --xm-radius-full: 9999px;
+
+  /* Shadows */
+  --xm-shadow-sm: 0 1px 2px rgba(45, 42, 38, 0.04);
+  --xm-shadow-default: 0 1px 3px rgba(45, 42, 38, 0.06), 0 1px 2px rgba(45, 42, 38, 0.04);
+  --xm-shadow-md: 0 4px 6px rgba(45, 42, 38, 0.06), 0 2px 4px rgba(45, 42, 38, 0.04);
+  --xm-shadow-lg: 0 10px 24px rgba(45, 42, 38, 0.08), 0 4px 8px rgba(45, 42, 38, 0.04);
+  --xm-shadow-card: 0 2px 8px rgba(45, 42, 38, 0.06), 0 0 1px rgba(45, 42, 38, 0.08);
+
+  /* Layout */
+  --xm-bottomnav-height: 64px;
+  --xm-content-max-width: 430px;
+
+  /* Typography */
+  --xm-font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+
+  /* Transitions */
+  --xm-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --xm-transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --xm-transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Base styles ─── */
+
+body {
+  font-family: var(--xm-font-sans);
+  background-color: var(--xm-bg-page);
+  color: var(--xm-text-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--xm-text-heading);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ─── Utility classes ─── */
+
+/* Hide scrollbar but keep functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Safe-area-aware bottom padding (for bottom nav) */
+.pb-safe-bottom {
+  padding-bottom: calc(var(--xm-bottomnav-height) + env(safe-area-inset-bottom, 0px));
+}
+
+/* Content container — mobile-first centered layout */
+.container-app {
+  width: 100%;
+  max-width: var(--xm-content-max-width);
+  margin-inline: auto;
+  padding-inline: 16px;
+}
