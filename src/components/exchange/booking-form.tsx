@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Zap, AlertCircle } from 'lucide-react'
+import { Clock, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, Avatar, Button } from '@/components/ui'
 import { TimeSlotPicker } from './time-slot-picker'
@@ -99,7 +99,7 @@ export function BookingForm({
         />
       </Card>
 
-      {/* ─── EU amount ─── */}
+      {/* ─── TU amount ─── */}
       <Card>
         <div className="flex items-center justify-between">
           <div>
@@ -107,11 +107,11 @@ export function BookingForm({
               Exchange cost
             </h3>
             <div className="flex items-center gap-1.5">
-              <Zap size={18} className="text-primary" />
+              <Clock size={18} className="text-primary" />
               <span className="text-2xl font-bold text-primary tabular-nums">
                 {listing.creditPrice}
               </span>
-              <span className="text-sm font-semibold text-primary/60">EU</span>
+              <span className="text-sm font-semibold text-primary/60">TU</span>
             </div>
           </div>
           <div className="text-right">
@@ -122,7 +122,7 @@ export function BookingForm({
                 hasSufficientBalance ? 'text-heading' : 'text-error',
               )}
             >
-              {walletBalance} EU
+              {walletBalance} TU
             </p>
           </div>
         </div>
@@ -131,7 +131,7 @@ export function BookingForm({
           <div className="flex items-center gap-2 mt-3 px-3 py-2.5 rounded-lg bg-error/8 border border-error/15">
             <AlertCircle size={16} className="text-error shrink-0" />
             <p className="text-xs text-error font-medium">
-              Insufficient balance. You need {listing.creditPrice - walletBalance} more EU.
+              Insufficient balance. You need {listing.creditPrice - walletBalance} more TU.
             </p>
           </div>
         )}
@@ -139,7 +139,7 @@ export function BookingForm({
 
       {/* ─── Escrow notice ─── */}
       <p className="text-xs text-center text-muted leading-relaxed px-4">
-        EU will be held in escrow until the exchange is marked complete by both parties.
+        TU will be held in escrow until the exchange is marked complete by both parties.
       </p>
 
       {/* ─── Error ─── */}

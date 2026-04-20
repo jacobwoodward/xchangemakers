@@ -9,6 +9,10 @@ const postgres = require('postgres');
 const sql = postgres(process.env.DATABASE_URL);
 
 async function run() {
+  // Apply idempotent migrations first — safe to run on any schema version.
+  // This handles the EU→TU rename (Phase 1) so existing prod DBs don't break.
+  await migrate();
+
   // Check if schema exists
   const tables = await sql`
     SELECT count(*)::int as c FROM information_schema.tables
@@ -35,6 +39,60 @@ async function run() {
   console.log('Seed complete');
 
   await sql.end();
+}
+
+/**
+ * Idempotent migrations for upgrading in-place from previous schema versions.
+ * Each step checks before altering so it's safe to run on any state:
+ *   - fresh DB (nothing to rename)
+ *   - pre-Phase-1 DB (old EU/vitality_tier names present)
+ *   - post-Phase-1 DB (new names present — no-op)
+ */
+async function migrate() {
+  // Phase 1: Rename eu_amount → tu_amount on exchanges
+  await sql.unsafe(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'exchanges'
+          AND column_name = 'eu_amount'
+      ) THEN
+        ALTER TABLE exchanges RENAME COLUMN eu_amount TO tu_amount;
+        RAISE NOTICE 'Migrated: exchanges.eu_amount → tu_amount';
+      END IF;
+    END $$;
+  `);
+
+  // Phase 1: Rename eu_earned → tu_earned on onboarding_progress
+  await sql.unsafe(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'onboarding_progress'
+          AND column_name = 'eu_earned'
+      ) THEN
+        ALTER TABLE onboarding_progress RENAME COLUMN eu_earned TO tu_earned;
+        RAISE NOTICE 'Migrated: onboarding_progress.eu_earned → tu_earned';
+      END IF;
+    END $$;
+  `);
+
+  // Phase 1: Rename vitality_tier enum → community_tier, relabel values.
+  // ALTER TYPE RENAME VALUE is safe on existing data (stored by internal position).
+  await sql.unsafe(`
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'vitality_tier') THEN
+        ALTER TYPE vitality_tier RENAME VALUE 'sprouting' TO 'starting';
+        ALTER TYPE vitality_tier RENAME VALUE 'growing' TO 'active';
+        ALTER TYPE vitality_tier RENAME VALUE 'rooted' TO 'established';
+        ALTER TYPE vitality_tier RENAME VALUE 'thriving' TO 'strong';
+        ALTER TYPE vitality_tier RENAME TO community_tier;
+        RAISE NOTICE 'Migrated: vitality_tier → community_tier';
+      END IF;
+    END $$;
+  `);
 }
 
 async function createSchema() {
@@ -74,7 +132,7 @@ async function createSchema() {
       CREATE TYPE activity_type AS ENUM ('new_listing', 'new_member', 'exchange_completed', 'happening_posted', 'treasury_milestone', 'weekly_stats');
     EXCEPTION WHEN duplicate_object THEN null; END $$;
     DO $$ BEGIN
-      CREATE TYPE vitality_tier AS ENUM ('sprouting', 'growing', 'rooted', 'thriving');
+      CREATE TYPE community_tier AS ENUM ('starting', 'active', 'established', 'strong');
     EXCEPTION WHEN duplicate_object THEN null; END $$;
     DO $$ BEGIN
       CREATE TYPE onboarding_step AS ENUM ('profile_photo', 'intro_vibe', 'add_offerings', 'post_need', 'rsvp_happening', 'first_exchange', 'first_review', 'invite_neighbor');
@@ -144,7 +202,7 @@ async function createSchema() {
       provider_id uuid NOT NULL REFERENCES members(id),
       requester_id uuid NOT NULL REFERENCES members(id),
       status exchange_status NOT NULL DEFAULT 'requested',
-      eu_amount integer NOT NULL,
+      tu_amount integer NOT NULL,
       scheduled_at timestamptz,
       completed_at timestamptz,
       created_at timestamptz NOT NULL DEFAULT now(),
@@ -226,7 +284,7 @@ async function createSchema() {
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       community_name varchar(200) NOT NULL,
       balance decimal(12,2) NOT NULL DEFAULT 0,
-      tier vitality_tier NOT NULL DEFAULT 'sprouting',
+      tier community_tier NOT NULL DEFAULT 'starting',
       exchanges_this_week integer NOT NULL DEFAULT 0,
       total_exchanges integer NOT NULL DEFAULT 0,
       total_members integer NOT NULL DEFAULT 0,
@@ -261,7 +319,7 @@ async function createSchema() {
       member_id uuid NOT NULL REFERENCES members(id),
       step onboarding_step NOT NULL,
       completed boolean NOT NULL DEFAULT false,
-      eu_earned integer NOT NULL DEFAULT 0,
+      tu_earned integer NOT NULL DEFAULT 0,
       completed_at timestamptz,
       created_at timestamptz NOT NULL DEFAULT now()
     );
@@ -292,27 +350,27 @@ async function seedData() {
     (${MARCUS}, 'Marcus', 'Johnson', 'marcus@example.com', 'CPA offering tax prep and financial coaching.', 'Making finances make sense', 'Garden Oaks', 29.8070, -95.4060, 'standard')
   `;
 
-  // Wallets
+  // Wallets (1 TU = 1 hour of community time)
   await sql`INSERT INTO wallets (member_id, balance, total_earned, monthly_earned, escrow_held) VALUES
-    (${LAUREN}, 120, 155, 35, 25), (${MARIA}, 85, 110, 20, 0), (${PRIYA}, 140, 200, 40, 0),
-    (${SARAH}, 60, 80, 15, 0), (${DAVID}, 95, 130, 25, 0), (${AISHA}, 75, 100, 20, 0),
-    (${TOM}, 110, 150, 30, 0), (${MARCUS}, 50, 65, 10, 0)
+    (${LAUREN}, 12, 18, 4, 2), (${MARIA}, 8, 11, 2, 0), (${PRIYA}, 14, 20, 4, 0),
+    (${SARAH}, 6, 8, 2, 0), (${DAVID}, 9, 13, 2, 0), (${AISHA}, 7, 10, 2, 0),
+    (${TOM}, 11, 15, 3, 0), (${MARCUS}, 5, 7, 1, 0)
   `;
 
-  // Listings
+  // Listings (prices in TU, where 1 TU ≈ 1 hour of community time)
   await sql`INSERT INTO listings (member_id, type, title, description, category, credit_price) VALUES
-    (${MARIA}, 'offering', 'Fresh Homemade Tamales (dozen)', 'Made with love using my grandmother''s recipe.', 'food', 15),
-    (${PRIYA}, 'offering', 'Vinyasa Yoga Private Session', '60-minute session tailored to your level.', 'wellness', 25),
-    (${SARAH}, 'offering', 'Sourdough Bread Baking Class', 'Learn to make sourdough from scratch.', 'classes', 20),
-    (${SARAH}, 'offering', 'Homemade Sourdough Loaf', 'Freshly baked artisan sourdough bread.', 'food', 8),
-    (${DAVID}, 'offering', 'Bicycle Tune-Up & Repair', 'Full tune-up including brakes, gears, and chain.', 'services', 15),
-    (${AISHA}, 'offering', 'Tarot Reading (30 min)', 'Intuitive guidance for your questions.', 'wellness', 20),
-    (${TOM}, 'offering', 'Family Portrait Session', '1-hour outdoor photo session with edited images.', 'services', 35),
-    (${MARCUS}, 'offering', 'Basic Tax Preparation Help', 'Help filing simple returns and finding deductions.', 'services', 30),
-    (${LAUREN}, 'offering', 'Community Event Planning', 'Help organizing neighborhood events and gatherings.', 'services', 15),
+    (${MARIA}, 'offering', 'Fresh Homemade Tamales (dozen)', 'Made with love using my grandmother''s recipe.', 'food', 2),
+    (${PRIYA}, 'offering', 'Vinyasa Yoga Private Session', '60-minute session tailored to your level.', 'wellness', 1),
+    (${SARAH}, 'offering', 'Sourdough Bread Baking Class', 'Learn to make sourdough from scratch.', 'classes', 3),
+    (${SARAH}, 'offering', 'Homemade Sourdough Loaf', 'Freshly baked artisan sourdough bread.', 'food', 1),
+    (${DAVID}, 'offering', 'Bicycle Tune-Up & Repair', 'Full tune-up including brakes, gears, and chain.', 'services', 2),
+    (${AISHA}, 'offering', 'Tarot Reading (30 min)', 'Intuitive guidance for your questions.', 'wellness', 1),
+    (${TOM}, 'offering', 'Family Portrait Session', '1-hour outdoor photo session with edited images.', 'services', 3),
+    (${MARCUS}, 'offering', 'Basic Tax Preparation Help', 'Help filing simple returns and finding deductions.', 'services', 2),
+    (${LAUREN}, 'offering', 'Community Event Planning', 'Help organizing neighborhood events and gatherings.', 'services', 3),
     (${LAUREN}, 'need', 'Looking for homemade birthday cake', 'Need a special cake for a neighborhood celebration.', 'food', 0),
-    (${DAVID}, 'offering', 'Custom Wooden Cutting Board', 'Handcrafted from reclaimed hardwood.', 'handmade', 25),
-    (${TOM}, 'offering', 'Drone Footage of Your Property', '4K aerial video and photos.', 'tech', 30)
+    (${DAVID}, 'offering', 'Custom Wooden Cutting Board', 'Handcrafted from reclaimed hardwood.', 'handmade', 4),
+    (${TOM}, 'offering', 'Drone Footage of Your Property', '4K aerial video and photos.', 'tech', 2)
   `;
 
   // Happenings
@@ -330,7 +388,7 @@ async function seedData() {
 
   // Treasury
   await sql`INSERT INTO treasury (community_name, balance, tier, exchanges_this_week, total_exchanges, total_members) VALUES
-    ('Oak Forest', 7240, 'rooted', 14, 89, 127)
+    ('Oak Forest', 7240, 'established', 14, 89, 127)
   `;
 
   // Activity feed
@@ -339,21 +397,21 @@ async function seedData() {
     ('new_member', ${JSON.stringify({memberName:'Marcus Johnson',neighborhood:'Garden Oaks'})}, now() - interval '3 hours'),
     ('exchange_completed', ${JSON.stringify({member1:'Lauren Chen',member2:'Maria Gonzalez'})}, now() - interval '6 hours'),
     ('happening_posted', ${JSON.stringify({title:'Oak Forest Exchange Event',date:nextSat.toISOString()})}, now() - interval '1 day'),
-    ('treasury_milestone', ${JSON.stringify({communityName:'Oak Forest',amount:7000})}, now() - interval '2 days'),
+    ('treasury_milestone', ${JSON.stringify({communityName:'Oak Forest',milestone:'7,000 TU exchanged'})}, now() - interval '2 days'),
     ('weekly_stats', ${JSON.stringify({count:14})}, now() - interval '3 days'),
     ('new_listing', ${JSON.stringify({memberName:'Priya Patel',title:'Vinyasa Yoga Private Session'})}, now() - interval '4 days'),
     ('new_listing', ${JSON.stringify({memberName:'David Kim',title:'Bicycle Tune-Up & Repair'})}, now() - interval '5 days')
   `;
 
-  // Onboarding for Lauren (7 of 8 complete)
-  await sql`INSERT INTO onboarding_progress (member_id, step, completed, eu_earned, completed_at) VALUES
-    (${LAUREN}, 'profile_photo', true, 5, now() - interval '7 days'),
-    (${LAUREN}, 'intro_vibe', true, 5, now() - interval '7 days'),
-    (${LAUREN}, 'add_offerings', true, 5, now() - interval '6 days'),
-    (${LAUREN}, 'post_need', true, 5, now() - interval '6 days'),
-    (${LAUREN}, 'rsvp_happening', true, 5, now() - interval '5 days'),
-    (${LAUREN}, 'first_exchange', true, 15, now() - interval '3 days'),
-    (${LAUREN}, 'first_review', true, 5, now() - interval '3 days'),
+  // Onboarding for Lauren (7 of 8 complete, 1 TU = 1 hour scale)
+  await sql`INSERT INTO onboarding_progress (member_id, step, completed, tu_earned, completed_at) VALUES
+    (${LAUREN}, 'profile_photo', true, 1, now() - interval '7 days'),
+    (${LAUREN}, 'intro_vibe', true, 1, now() - interval '7 days'),
+    (${LAUREN}, 'add_offerings', true, 2, now() - interval '6 days'),
+    (${LAUREN}, 'post_need', true, 1, now() - interval '6 days'),
+    (${LAUREN}, 'rsvp_happening', true, 1, now() - interval '5 days'),
+    (${LAUREN}, 'first_exchange', true, 2, now() - interval '3 days'),
+    (${LAUREN}, 'first_review', true, 1, now() - interval '3 days'),
     (${LAUREN}, 'invite_neighbor', false, 0, null)
   `;
 }

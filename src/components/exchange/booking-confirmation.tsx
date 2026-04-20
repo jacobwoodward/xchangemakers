@@ -114,7 +114,7 @@ export function BookingConfirmation({
                 Amount
               </span>
               <span className="text-sm font-bold text-primary tabular-nums">
-                {exchange.euAmount} EU
+                {exchange.tuAmount} TU
               </span>
             </div>
           </div>
@@ -130,7 +130,7 @@ export function BookingConfirmation({
       >
         <Lock size={16} className="text-accent-dark shrink-0" />
         <p className="text-xs text-accent-dark font-medium leading-relaxed">
-          {exchange.euAmount} EU will be held in escrow until the exchange is complete.
+          {exchange.tuAmount} TU will be held in escrow until the exchange is complete.
         </p>
       </motion.div>
 

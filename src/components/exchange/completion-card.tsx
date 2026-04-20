@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Zap } from 'lucide-react'
+import { Clock } from 'lucide-react'
 import { Avatar, Button } from '@/components/ui'
 import type { Exchange, Member } from '@/lib/exchange-engine'
 
@@ -85,7 +85,7 @@ export function CompletionCard({
           animate={{ scale: 1 }}
           transition={{ type: 'spring', stiffness: 300, damping: 20, delay: 0.1 }}
         >
-          <Zap size={36} className="text-primary" strokeWidth={1.5} />
+          <Clock size={36} className="text-primary" strokeWidth={1.5} />
         </motion.div>
       </div>
 
@@ -99,7 +99,7 @@ export function CompletionCard({
         <h2 className="text-2xl font-bold text-heading">Exchange Complete!</h2>
         <p className="text-sm text-secondary">
           <span className="font-semibold text-primary tabular-nums">
-            {exchange.euAmount} EU
+            {exchange.tuAmount} TU
           </span>
           {' '}transferred to {provider.firstName}
         </p>
@@ -124,7 +124,7 @@ export function CompletionCard({
 
         <div className="flex items-center gap-1">
           <div className="w-6 h-px bg-border" />
-          <Zap size={14} className="text-primary shrink-0" />
+          <Clock size={14} className="text-primary shrink-0" />
           <div className="w-6 h-px bg-border" />
         </div>
 

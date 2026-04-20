@@ -5,11 +5,10 @@ import type { ActivityFeedItem, ActivityType } from '@/lib/exchange-engine'
 import { PageTransition } from '@/components/shared/page-transition'
 import { SectionHeader } from '@/components/shared/section-header'
 import { SearchPrompt } from '@/components/home/search-prompt'
-import { EuBalanceCard } from '@/components/home/eu-balance-card'
+import { TuBalanceCard } from '@/components/home/tu-balance-card'
 import { TreasuryProgress } from '@/components/home/treasury-progress'
 import { HappeningsPreview } from '@/components/home/happenings-preview'
-import { ShopLocalHighlights } from '@/components/home/shop-local-highlights'
-import { AvailableNeighbors } from '@/components/home/available-neighbors'
+import { ShopLocalCategories } from '@/components/home/shop-local-categories'
 import {
   ArrowRightLeft,
   CalendarPlus,
@@ -41,8 +40,9 @@ const ACTIVITY_ICON: Record<ActivityType, typeof ArrowRightLeft> = {
 }
 
 const ACTIVITY_LABEL: Record<ActivityType, (data: Record<string, unknown>) => string> = {
-  exchange_completed: (d) =>
-    `${d.providerName ?? 'Someone'} exchanged with ${d.requesterName ?? 'a neighbor'}`,
+  // Kept intentionally vague — no provider/requester names, no amounts.
+  // The activity feed is a positive public signal, not an exchange log.
+  exchange_completed: () => 'Two neighbors completed an exchange',
   happening_posted: (d) =>
     `New happening: ${d.title ?? 'Untitled'}`,
   new_member: (d) =>
@@ -85,12 +85,8 @@ export default async function HomePage() {
   const wallet = await exchangeEngine.getWallet(currentMember.id)
   const treasury = await exchangeEngine.getTreasury()
   const happenings = await exchangeEngine.getHappenings()
-  const members = await exchangeEngine.getMembers()
   const { items: activityItems } = await exchangeEngine.getActivityFeed()
 
-  // Derive data
-  const businessMembers = members.filter((m) => m.membershipType === 'business')
-  const availableMembers = members.filter((m) => m.isAvailable).slice(0, 10)
   const recentActivity = activityItems.slice(0, 5)
   const greeting = getGreeting()
 
@@ -107,15 +103,15 @@ export default async function HomePage() {
           </p>
         </div>
 
-        {/* ─── EU Balance ─── */}
-        <EuBalanceCard
+        {/* ─── "What do you need today?" — hero search ─── */}
+        <SearchPrompt />
+
+        {/* ─── TU Balance ─── */}
+        <TuBalanceCard
           balance={wallet.balance}
           monthlyEarned={wallet.monthlyEarned}
           escrowHeld={wallet.escrowHeld}
         />
-
-        {/* ─── Search ─── */}
-        <SearchPrompt />
 
         {/* ─── Treasury ─── */}
         <TreasuryProgress treasury={treasury} />
@@ -128,21 +124,14 @@ export default async function HomePage() {
           </section>
         )}
 
-        {/* ─── Shop Local ─── */}
-        {businessMembers.length > 0 && (
-          <section>
-            <SectionHeader title="Shop Local" />
-            <ShopLocalHighlights members={businessMembers} />
-          </section>
-        )}
-
-        {/* ─── Available Neighbors ─── */}
-        {availableMembers.length > 0 && (
-          <section>
-            <SectionHeader title="Neighbors Available" />
-            <AvailableNeighbors members={availableMembers} />
-          </section>
-        )}
+        {/* ─── Shop Local (category-based, not people) ─── */}
+        <section>
+          <SectionHeader
+            title="Shop Local"
+            href="/search?type=businesses"
+          />
+          <ShopLocalCategories />
+        </section>
 
         {/* ─── Recent Activity ─── */}
         {recentActivity.length > 0 && (

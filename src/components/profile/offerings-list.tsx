@@ -39,7 +39,7 @@ function ListingCard({ listing }: { listing: Listing }) {
             {listing.title}
           </h4>
           <span className="shrink-0 text-sm font-bold text-primary tabular-nums whitespace-nowrap">
-            {listing.creditPrice} EU
+            {listing.creditPrice} TU
           </span>
         </div>
 

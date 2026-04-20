@@ -55,8 +55,14 @@ import type {
   CreateExchangeInput,
   CreateBookingInput,
   CreateReviewInput,
+  CreateListingInput,
   SendMessageInput,
 } from './types'
+
+import {
+  ONBOARDING_TU_REWARDS,
+  ONBOARDING_STEP_LABELS,
+} from './constants'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -143,7 +149,7 @@ function toExchange(
     providerId: row.providerId,
     requesterId: row.requesterId,
     status: row.status,
-    euAmount: row.euAmount,
+    tuAmount: row.tuAmount,
     scheduledAt: row.scheduledAt?.toISOString() ?? null,
     completedAt: row.completedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -298,6 +304,89 @@ export class ExchangeEngineClient {
     return toListing(row, memberRow ? toMember(memberRow) : undefined)
   }
 
+  /**
+   * Create a new listing owned by the current member.
+   * The listing is active by default.
+   */
+  async createListing(input: CreateListingInput): Promise<Listing> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const [row] = await db
+      .insert(listings)
+      .values({
+        memberId: this.currentMemberId,
+        type: input.type,
+        title: input.title,
+        description: input.description,
+        category: input.category,
+        creditPrice: input.creditPrice,
+        availabilityType: input.availabilityType ?? 'ongoing',
+        imageUrls: input.imageUrls ?? [],
+      })
+      .returning()
+
+    return toListing(row)
+  }
+
+  /**
+   * Update a listing. Only the owner can update their own listings;
+   * this is enforced by the current-member check.
+   */
+  async updateListing(
+    id: string,
+    input: Partial<CreateListingInput>,
+  ): Promise<Listing> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const [existing] = await db
+      .select()
+      .from(listings)
+      .where(eq(listings.id, id))
+    if (!existing) throw new Error(`Listing ${id} not found`)
+    if (existing.memberId !== this.currentMemberId) {
+      throw new Error('Not authorized to edit this listing')
+    }
+
+    const [row] = await db
+      .update(listings)
+      .set({
+        ...(input.type !== undefined ? { type: input.type } : {}),
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.category !== undefined ? { category: input.category } : {}),
+        ...(input.creditPrice !== undefined ? { creditPrice: input.creditPrice } : {}),
+        ...(input.availabilityType !== undefined ? { availabilityType: input.availabilityType } : {}),
+        ...(input.imageUrls !== undefined ? { imageUrls: input.imageUrls } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(listings.id, id))
+      .returning()
+
+    return toListing(row)
+  }
+
+  /**
+   * Soft-delete a listing by flipping isActive to false. This preserves the
+   * history of exchanges that referenced it. Only the owner can delete.
+   */
+  async deleteListing(id: string): Promise<void> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const [existing] = await db
+      .select()
+      .from(listings)
+      .where(eq(listings.id, id))
+    if (!existing) throw new Error(`Listing ${id} not found`)
+    if (existing.memberId !== this.currentMemberId) {
+      throw new Error('Not authorized to delete this listing')
+    }
+
+    await db
+      .update(listings)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(listings.id, id))
+  }
+
   // ---- Search (person-first) ----------------------------------------------
 
   /**
@@ -410,7 +499,7 @@ export class ExchangeEngineClient {
   }
 
   /**
-   * Create a new exchange request. Places the EU amount in escrow by
+   * Create a new exchange request. Places the TU amount in escrow by
    * debiting the requester's wallet and recording an escrow_hold transaction.
    */
   async createExchange(input: CreateExchangeInput): Promise<Exchange> {
@@ -428,7 +517,7 @@ export class ExchangeEngineClient {
           providerId: input.providerId,
           requesterId: this.currentMemberId,
           status: initialStatus,
-          euAmount: input.euAmount,
+          tuAmount: input.tuAmount,
           scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
         })
         .returning()
@@ -444,15 +533,15 @@ export class ExchangeEngineClient {
       await tx
         .update(wallets)
         .set({
-          balance: sql`${wallets.balance} - ${input.euAmount}`,
-          escrowHeld: sql`${wallets.escrowHeld} + ${input.euAmount}`,
+          balance: sql`${wallets.balance} - ${input.tuAmount}`,
+          escrowHeld: sql`${wallets.escrowHeld} + ${input.tuAmount}`,
         })
         .where(eq(wallets.id, wallet.id))
 
       await tx.insert(walletTransactions).values({
         walletId: wallet.id,
         type: 'escrow_hold',
-        amount: input.euAmount,
+        amount: input.tuAmount,
         description: `Escrow hold for exchange`,
         exchangeId: exchangeRow.id,
       })
@@ -520,23 +609,23 @@ export class ExchangeEngineClient {
         tx
           .update(wallets)
           .set({
-            balance: sql`${wallets.balance} + ${exchangeRow.euAmount}`,
-            totalEarned: sql`${wallets.totalEarned} + ${exchangeRow.euAmount}`,
-            monthlyEarned: sql`${wallets.monthlyEarned} + ${exchangeRow.euAmount}`,
+            balance: sql`${wallets.balance} + ${exchangeRow.tuAmount}`,
+            totalEarned: sql`${wallets.totalEarned} + ${exchangeRow.tuAmount}`,
+            monthlyEarned: sql`${wallets.monthlyEarned} + ${exchangeRow.tuAmount}`,
           })
           .where(eq(wallets.id, providerWallet.id)),
         // Clear requester escrow
         tx
           .update(wallets)
           .set({
-            escrowHeld: sql`${wallets.escrowHeld} - ${exchangeRow.euAmount}`,
+            escrowHeld: sql`${wallets.escrowHeld} - ${exchangeRow.tuAmount}`,
           })
           .where(eq(wallets.id, requesterWallet.id)),
         // Provider transaction
         tx.insert(walletTransactions).values({
           walletId: providerWallet.id,
           type: 'escrow_release',
-          amount: exchangeRow.euAmount,
+          amount: exchangeRow.tuAmount,
           description: `Payment received for exchange`,
           exchangeId: id,
         }),
@@ -544,7 +633,7 @@ export class ExchangeEngineClient {
         tx.insert(walletTransactions).values({
           walletId: requesterWallet.id,
           type: 'spent',
-          amount: exchangeRow.euAmount,
+          amount: exchangeRow.tuAmount,
           description: `Payment for completed exchange`,
           exchangeId: id,
         }),
@@ -805,7 +894,7 @@ export class ExchangeEngineClient {
       memberId: r.memberId,
       step: r.step,
       completed: r.completed,
-      euEarned: r.euEarned,
+      tuEarned: r.tuEarned,
       completedAt: r.completedAt?.toISOString() ?? null,
     }))
   }
@@ -814,35 +903,12 @@ export class ExchangeEngineClient {
     memberId: string,
     step: OnboardingStep,
   ): Promise<void> {
-    // EU rewards per onboarding step
-    const ONBOARDING_EU_REWARDS: Record<OnboardingStep, number> = {
-      profile_photo: 5,
-      intro_vibe: 5,
-      add_offerings: 5,
-      post_need: 5,
-      rsvp_happening: 5,
-      first_exchange: 15,
-      first_review: 5,
-      invite_neighbor: 10,
-    }
+    const tuReward = ONBOARDING_TU_REWARDS[step]
 
-    const ONBOARDING_STEP_LABELS: Record<OnboardingStep, string> = {
-      profile_photo: 'Add a photo',
-      intro_vibe: 'Set your vibe',
-      add_offerings: 'Add offerings',
-      post_need: 'Post a need',
-      rsvp_happening: 'RSVP to a happening',
-      first_exchange: 'Complete first exchange',
-      first_review: 'Leave first review',
-      invite_neighbor: 'Invite a neighbor',
-    }
-
-    const euReward = ONBOARDING_EU_REWARDS[step]
-
-    // Mark the step complete and record EU earned
+    // Mark the step complete and record TU earned
     await db
       .update(onboardingProgress)
-      .set({ completed: true, completedAt: new Date(), euEarned: euReward })
+      .set({ completed: true, completedAt: new Date(), tuEarned: tuReward })
       .where(
         and(
           eq(onboardingProgress.memberId, memberId),
@@ -861,16 +927,16 @@ export class ExchangeEngineClient {
     await db
       .update(wallets)
       .set({
-        balance: sql`${wallets.balance} + ${euReward}`,
-        totalEarned: sql`${wallets.totalEarned} + ${euReward}`,
-        monthlyEarned: sql`${wallets.monthlyEarned} + ${euReward}`,
+        balance: sql`${wallets.balance} + ${tuReward}`,
+        totalEarned: sql`${wallets.totalEarned} + ${tuReward}`,
+        monthlyEarned: sql`${wallets.monthlyEarned} + ${tuReward}`,
       })
       .where(eq(wallets.id, wallet.id))
 
     await db.insert(walletTransactions).values({
       walletId: wallet.id,
       type: 'earned',
-      amount: euReward,
+      amount: tuReward,
       description: `Onboarding: ${ONBOARDING_STEP_LABELS[step]}`,
     })
   }

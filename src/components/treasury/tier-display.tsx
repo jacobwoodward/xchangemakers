@@ -1,58 +1,58 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Leaf, Sprout, TreePine, Trees } from 'lucide-react'
+import { Users, UsersRound, Building2, Landmark } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { VitalityTier } from '@/lib/exchange-engine'
+import type { CommunityTier } from '@/lib/exchange-engine'
 
 interface TierDisplayProps {
-  currentTier: VitalityTier
+  currentTier: CommunityTier
   balance: number
 }
 
 const TIERS = [
   {
-    key: 'sprouting' as const,
-    label: 'Sprouting',
+    key: 'starting' as const,
+    label: 'Starting',
     range: '$0 - $999',
     min: 0,
     max: 999,
-    Icon: Leaf,
+    Icon: Users,
   },
   {
-    key: 'growing' as const,
-    label: 'Growing',
+    key: 'active' as const,
+    label: 'Active',
     range: '$1K - $4.9K',
     min: 1000,
     max: 4999,
-    Icon: Sprout,
+    Icon: UsersRound,
   },
   {
-    key: 'rooted' as const,
-    label: 'Rooted',
+    key: 'established' as const,
+    label: 'Established',
     range: '$5K - $9.9K',
     min: 5000,
     max: 9999,
-    Icon: TreePine,
+    Icon: Building2,
   },
   {
-    key: 'thriving' as const,
-    label: 'Thriving',
+    key: 'strong' as const,
+    label: 'Strong',
     range: '$10K+',
     min: 10000,
     max: Infinity,
-    Icon: Trees,
+    Icon: Landmark,
   },
 ] as const
 
-const TIER_ORDER: Record<VitalityTier, number> = {
-  sprouting: 0,
-  growing: 1,
-  rooted: 2,
-  thriving: 3,
+const TIER_ORDER: Record<CommunityTier, number> = {
+  starting: 0,
+  active: 1,
+  established: 2,
+  strong: 3,
 }
 
-export function TierDisplay({ currentTier, balance }: TierDisplayProps) {
+export function TierDisplay({ currentTier, balance: _balance }: TierDisplayProps) {
   const currentIndex = TIER_ORDER[currentTier]
 
   return (

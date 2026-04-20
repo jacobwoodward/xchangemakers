@@ -44,7 +44,7 @@ export function OnboardingTrailClient({ initialSteps }: OnboardingTrailClientPro
         memberId: '',
         step: stepName,
         completed: false,
-        euEarned: STEP_INFO[stepName].eu,
+        tuEarned: STEP_INFO[stepName].tu,
         completedAt: null,
       },
   )
@@ -66,7 +66,7 @@ export function OnboardingTrailClient({ initialSteps }: OnboardingTrailClientPro
       )
 
       // Show reward animation
-      setReward({ amount: info.eu })
+      setReward({ amount: info.tu })
 
       // Persist to server
       startTransition(async () => {

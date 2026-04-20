@@ -4,17 +4,17 @@ import { motion } from 'framer-motion'
 import { Handshake, Users, ArrowRightLeft, Target } from 'lucide-react'
 import { Card } from '@/components/ui'
 import { cn } from '@/lib/utils'
-import type { TreasuryInfo, VitalityTier } from '@/lib/exchange-engine'
+import type { TreasuryInfo, CommunityTier } from '@/lib/exchange-engine'
 
 interface CommunityStatsProps {
   treasury: TreasuryInfo
 }
 
-const TIER_THRESHOLDS: Record<VitalityTier, { next: string; target: number } | null> = {
-  sprouting: { next: 'Growing', target: 1000 },
-  growing: { next: 'Rooted', target: 5000 },
-  rooted: { next: 'Thriving', target: 10000 },
-  thriving: null,
+const TIER_THRESHOLDS: Record<CommunityTier, { next: string; target: number } | null> = {
+  starting: { next: 'Active', target: 1000 },
+  active: { next: 'Established', target: 5000 },
+  established: { next: 'Strong', target: 10000 },
+  strong: null,
 }
 
 function formatAmount(n: number): string {

@@ -2,17 +2,19 @@ export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
 import { exchangeEngine } from '@/lib/exchange-engine'
+import { TOTAL_ONBOARDING_TU } from '@/lib/exchange-engine'
 import { PageTransition } from '@/components/shared/page-transition'
-import { Card, Avatar, Badge, Button } from '@/components/ui'
+import { Card, Badge, Button } from '@/components/ui'
 import { MemberHeader } from '@/components/profile/member-header'
 import { ReputationTags } from '@/components/profile/reputation-tags'
-import { OfferingsList } from '@/components/profile/offerings-list'
+import { ListingsManager } from '@/components/profile/listings-manager'
 import { AvailabilityDisplay } from '@/components/profile/availability-display'
 import {
-  Zap,
+  Clock,
   Pencil,
   CheckCircle2,
   Circle,
+  Sparkles,
 } from 'lucide-react'
 import type { OnboardingProgress } from '@/lib/exchange-engine'
 
@@ -20,7 +22,7 @@ import type { OnboardingProgress } from '@/lib/exchange-engine'
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function EuBalanceMini({
+function TuBalanceMini({
   balance,
   monthlyEarned,
 }: {
@@ -36,16 +38,19 @@ function EuBalanceMini({
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Zap size={16} className="text-white/70" />
+          <Clock size={16} className="text-white/70" />
           <span className="text-sm font-medium text-white/70">My Balance</span>
         </div>
         <span className="text-xs font-medium text-white/50 tabular-nums">
-          {monthlyEarned} EU this month
+          {monthlyEarned} TU this month
         </span>
       </div>
       <p className="mt-1.5 text-3xl font-bold tracking-tight text-white tabular-nums">
         {balance}{' '}
-        <span className="text-base font-semibold text-white/60">EU</span>
+        <span className="text-base font-semibold text-white/60">TU</span>
+      </p>
+      <p className="mt-0.5 text-xs text-white/50">
+        1 TU ≈ 1 hour of community time
       </p>
     </Card>
   )
@@ -62,22 +67,36 @@ const STEP_LABELS: Record<string, string> = {
   invite_neighbor: 'Invite a neighbor',
 }
 
-function OnboardingTrail({ steps }: { steps: OnboardingProgress[] }) {
+function YourTrail({ steps }: { steps: OnboardingProgress[] }) {
   const total = steps.length
   const completed = steps.filter((s) => s.completed).length
+  const tuEarned = steps.reduce((sum, s) => (s.completed ? sum + s.tuEarned : sum), 0)
+  const tuRemaining = TOTAL_ONBOARDING_TU - tuEarned
 
   if (total === 0 || completed === total) return null
 
   return (
     <Card>
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
-          EU Trail
-        </h3>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10">
+            <Sparkles size={14} className="text-primary" />
+          </div>
+          <h3 className="text-sm font-semibold text-heading">Your Trail</h3>
+        </div>
         <span className="text-xs font-medium text-primary tabular-nums">
           {completed}/{total}
         </span>
       </div>
+
+      {/* Carrot — reward framing */}
+      {tuRemaining > 0 && (
+        <p className="mb-3 text-xs text-secondary leading-relaxed">
+          Earn <span className="font-semibold text-primary">{tuRemaining} more TU</span>{' '}
+          by finishing your trail. That&rsquo;s {tuRemaining}{' '}
+          {tuRemaining === 1 ? 'hour' : 'hours'} of community time you can spend.
+        </p>
+      )}
 
       {/* Progress bar */}
       <div className="h-1.5 rounded-full bg-hover overflow-hidden mb-3">
@@ -106,15 +125,21 @@ function OnboardingTrail({ steps }: { steps: OnboardingProgress[] }) {
               >
                 {label}
               </span>
-              {!step.completed && step.euEarned > 0 && (
+              {!step.completed && step.tuEarned > 0 && (
                 <Badge variant="primary" className="ml-auto text-[10px]">
-                  +{step.euEarned} EU
+                  +{step.tuEarned} TU
                 </Badge>
               )}
             </div>
           )
         })}
       </div>
+
+      <Link href="/onboarding" className="block mt-3">
+        <Button variant="primary" size="sm" className="w-full">
+          Continue trail
+        </Button>
+      </Link>
     </Card>
   )
 }
@@ -146,14 +171,14 @@ export default async function MyProfilePage() {
           </Link>
         </div>
 
-        {/* ─── EU Balance ─── */}
-        <EuBalanceMini
+        {/* ─── TU Balance ─── */}
+        <TuBalanceMini
           balance={wallet.balance}
           monthlyEarned={wallet.monthlyEarned}
         />
 
-        {/* ─── Onboarding Trail (if incomplete) ─── */}
-        {onboarding.length > 0 && <OnboardingTrail steps={onboarding} />}
+        {/* ─── Your Trail (if incomplete) ─── */}
+        {onboarding.length > 0 && <YourTrail steps={onboarding} />}
 
         {/* ─── Profile header ─── */}
         <MemberHeader member={member} />
@@ -163,8 +188,8 @@ export default async function MyProfilePage() {
           <ReputationTags tags={member.reputationTags} />
         )}
 
-        {/* ─── Offerings & Needs ─── */}
-        <OfferingsList offerings={member.offerings} needs={member.needs} />
+        {/* ─── Listings (with in-app CRUD) ─── */}
+        <ListingsManager offerings={member.offerings} needs={member.needs} />
 
         {/* ─── Availability ─── */}
         {availability.length > 0 && (

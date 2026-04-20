@@ -18,7 +18,7 @@ export const onboardingProgress = pgTable('onboarding_progress', {
   memberId: uuid('member_id').notNull().references(() => members.id),
   step: onboardingStepEnum('step').notNull(),
   completed: boolean('completed').default(false).notNull(),
-  euEarned: integer('eu_earned').default(0).notNull(),
+  tuEarned: integer('tu_earned').default(0).notNull(),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })

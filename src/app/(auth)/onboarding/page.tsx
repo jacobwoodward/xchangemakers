@@ -13,9 +13,9 @@ export default async function OnboardingPage() {
     <div className="space-y-5">
       {/* Header */}
       <div className="pt-2 pb-1">
-        <h1 className="text-xl font-bold text-heading">EU Trail</h1>
+        <h1 className="text-xl font-bold text-heading">Your Trail</h1>
         <p className="text-sm text-secondary mt-0.5">
-          Complete each step to earn Exchange Units
+          Complete each step to earn Time Units — 1 TU ≈ 1 hour of community time
         </p>
       </div>
 

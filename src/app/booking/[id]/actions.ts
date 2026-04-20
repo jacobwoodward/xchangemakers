@@ -5,7 +5,7 @@ import { exchangeEngine } from '@/lib/exchange-engine'
 export async function createBookingAction(
   listingId: string,
   providerId: string,
-  euAmount: number,
+  tuAmount: number,
   date: string,
   startTime: string,
   endTime: string,
@@ -13,11 +13,11 @@ export async function createBookingAction(
   try {
     await exchangeEngine.initialize()
 
-    // 1. Create the exchange (places EU in escrow)
+    // 1. Create the exchange (places TU in escrow)
     const exchange = await exchangeEngine.createExchange({
       listingId,
       providerId,
-      euAmount,
+      tuAmount,
       scheduledAt: `${date}T${startTime}:00`,
     })
 

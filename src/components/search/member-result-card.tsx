@@ -68,7 +68,7 @@ export function MemberResultCard({ member }: MemberResultCardProps) {
             <p className="mt-0.5 text-xs text-body leading-snug truncate">
               {primaryOffering.title}
               <span className="ml-1 font-medium text-primary">
-                {primaryOffering.creditPrice} EU
+                {primaryOffering.creditPrice} TU
               </span>
             </p>
           )}

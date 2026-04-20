@@ -7,7 +7,7 @@ import {
   Repeat,
   CalendarClock,
   PartyPopper,
-  Zap,
+  Clock,
   CalendarCheck,
 } from 'lucide-react'
 import type { AvailabilityType } from '@/lib/exchange-engine'
@@ -46,14 +46,17 @@ export default async function ListingDetailPage({
       <PageTransition>
         <div className="pt-16 pb-28 px-4 space-y-5">
           {/* ─── Price hero ─── */}
-          <div className="flex items-center justify-center py-4">
+          <div className="flex flex-col items-center justify-center py-4">
             <div className="flex items-center gap-2">
-              <Zap size={20} className="text-primary" />
+              <Clock size={20} className="text-primary" />
               <span className="text-4xl font-bold tracking-tight text-primary tabular-nums">
                 {listing.creditPrice}
               </span>
-              <span className="text-lg font-semibold text-primary/60">EU</span>
+              <span className="text-lg font-semibold text-primary/60">TU</span>
             </div>
+            <p className="mt-1 text-xs text-muted">
+              ≈ {listing.creditPrice} {listing.creditPrice === 1 ? 'hour' : 'hours'} of community time
+            </p>
           </div>
 
           {/* ─── Badges ─── */}

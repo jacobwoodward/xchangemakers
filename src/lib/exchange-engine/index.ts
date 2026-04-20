@@ -7,4 +7,5 @@
 // ---------------------------------------------------------------------------
 
 export * from './types'
+export * from './constants'
 export { exchangeEngine } from './client'

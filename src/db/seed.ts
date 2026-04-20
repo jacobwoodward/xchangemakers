@@ -575,7 +575,7 @@ async function seed() {
     { id: L_GARDEN, memberId: ROSA_ID, type: 'offering', title: 'Garden Setup Consultation', description: 'I visit your yard, assess sun, soil, and space, and give you a planting plan for vegetables, herbs, or flowers. Includes a written plan and a follow-up check-in after 2 weeks.', category: 'home', creditPrice: 20, availabilityType: 'ongoing', imageUrls: [] },
 
     // James — home
-    { id: L_FURNITURE, memberId: JAMES_ID, type: 'offering', title: 'Furniture Refinishing Consultation', description: 'Bring me a photo of your piece and I will tell you what it needs — sanding, staining, reupholstering, or structural repair. If we agree on the work, I will quote EU credits separately.', category: 'home', creditPrice: 15, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_FURNITURE, memberId: JAMES_ID, type: 'offering', title: 'Furniture Refinishing Consultation', description: 'Bring me a photo of your piece and I will tell you what it needs — sanding, staining, reupholstering, or structural repair. If we agree on the work, I will quote TU separately.', category: 'home', creditPrice: 15, availabilityType: 'ongoing', imageUrls: [] },
     { id: L_HANDYMAN2, memberId: JAMES_ID, type: 'offering', title: 'Handyman Half-Day (4 hrs)', description: 'Four hours of skilled labor: drywall, electrical outlets, fence repair, painting, you name it. I have been doing this for 15 years. Materials are extra (you supply or I source).', category: 'home', creditPrice: 50, availabilityType: 'ongoing', imageUrls: [] },
 
     // Fatima — classes
@@ -600,7 +600,7 @@ async function seed() {
 
     // Lauren — offerings and needs
     { id: L_LAUREN_OFFER, memberId: LAUREN_ID, type: 'offering', title: 'Neighborhood Welcome Package', description: 'I put together a welcome package for new Oak Forest neighbors: local restaurant recommendations, park guide, school info, a hand-written note, and an intro to the xChangeMakers community.', category: 'other', creditPrice: 5, availabilityType: 'ongoing', imageUrls: [] },
-    { id: L_LAUREN_NEED, memberId: LAUREN_ID, type: 'need', title: 'Looking for Someone to Help with Moving', description: 'My friend is moving into a house on Lamonte Lane next weekend. Need 2-3 strong people to help load and unload a U-Haul. Should take about 3-4 hours. Happy to provide lunch and EU credits.', category: 'services', creditPrice: 25, availabilityType: 'one_time', imageUrls: [] },
+    { id: L_LAUREN_NEED, memberId: LAUREN_ID, type: 'need', title: 'Looking for Someone to Help with Moving', description: 'My friend is moving into a house on Lamonte Lane next weekend. Need 2-3 strong people to help load and unload a U-Haul. Should take about 3-4 hours. Happy to provide lunch and TU.', category: 'services', creditPrice: 25, availabilityType: 'one_time', imageUrls: [] },
 
     // Need listings from various members
     { id: L_NEED_MOVING, memberId: JAKE_M_ID, type: 'need', title: 'Need Help Hauling Old Fence Lumber', description: 'I just tore down my back fence and have a truck-bed worth of old cedar to haul to the dump. Need one more person with a truck or strong back for about 2 hours.', category: 'services', creditPrice: 20, availabilityType: 'one_time', imageUrls: [] },
@@ -625,7 +625,7 @@ async function seed() {
       providerId: MARIA_ID,
       requesterId: LAUREN_ID,
       status: 'completed',
-      euAmount: 15,
+      tuAmount: 15,
       scheduledAt: daysAgo(5),
       completedAt: daysAgo(4),
     },
@@ -636,7 +636,7 @@ async function seed() {
       providerId: PRIYA_ID,
       requesterId: LAUREN_ID,
       status: 'in_escrow',
-      euAmount: 25,
+      tuAmount: 25,
       scheduledAt: twoDaysFromNow,
       completedAt: null,
     },
@@ -647,7 +647,7 @@ async function seed() {
       providerId: CHRIS_ID,
       requesterId: BEN_ID,
       status: 'requested',
-      euAmount: 25,
+      tuAmount: 25,
       scheduledAt: null,
       completedAt: null,
     },
@@ -658,7 +658,7 @@ async function seed() {
       providerId: DAVID_ID,
       requesterId: SARAH_ID,
       status: 'completed',
-      euAmount: 15,
+      tuAmount: 15,
       scheduledAt: daysAgo(10),
       completedAt: daysAgo(9),
     },
@@ -669,7 +669,7 @@ async function seed() {
       providerId: LAUREN_ID,
       requesterId: MARIA_ID,
       status: 'completed',
-      euAmount: 5,
+      tuAmount: 5,
       scheduledAt: daysAgo(5),
       completedAt: daysAgo(4),
     },
@@ -679,7 +679,7 @@ async function seed() {
       providerId: SARAH_ID,
       requesterId: DAVID_ID,
       status: 'completed',
-      euAmount: 8,
+      tuAmount: 8,
       scheduledAt: daysAgo(10),
       completedAt: daysAgo(9),
     },
@@ -690,7 +690,7 @@ async function seed() {
       providerId: JAKE_M_ID,
       requesterId: MARCUS_ID,
       status: 'completed',
-      euAmount: 20,
+      tuAmount: 20,
       scheduledAt: daysAgo(20),
       completedAt: daysAgo(19),
     },
@@ -700,7 +700,7 @@ async function seed() {
       providerId: BEN_ID,
       requesterId: ROSA_ID,
       status: 'completed',
-      euAmount: 10,
+      tuAmount: 10,
       scheduledAt: daysAgo(15),
       completedAt: daysAgo(15),
     },
@@ -710,7 +710,7 @@ async function seed() {
       providerId: DIANA_ID,
       requesterId: PRIYA_ID,
       status: 'completed',
-      euAmount: 20,
+      tuAmount: 20,
       scheduledAt: daysAgo(12),
       completedAt: daysAgo(12),
     },
@@ -720,7 +720,7 @@ async function seed() {
       providerId: ROSA_ID,
       requesterId: JAMES_ID,
       status: 'completed',
-      euAmount: 10,
+      tuAmount: 10,
       scheduledAt: daysAgo(8),
       completedAt: daysAgo(8),
     },
@@ -730,7 +730,7 @@ async function seed() {
       providerId: OMAR_ID,
       requesterId: LINDA_ID,
       status: 'completed',
-      euAmount: 15,
+      tuAmount: 15,
       scheduledAt: daysAgo(6),
       completedAt: daysAgo(6),
     },
@@ -898,7 +898,7 @@ async function seed() {
       id: HAP_EXCHANGE,
       hostId: LAUREN_ID,
       title: 'Oak Forest Exchange Event',
-      description: 'Our monthly neighborhood exchange! Bring your offerings, browse what your neighbors have, and meet new faces. Tamales, bread, handmade goods, and services all welcome. Everyone gets 10 bonus EU for attending.',
+      description: 'Our monthly neighborhood exchange! Bring your offerings, browse what your neighbors have, and meet new faces. Tamales, bread, handmade goods, and services all welcome. Everyone gets 1 bonus TU for attending.',
       category: 'exchange_event',
       location: 'Oak Forest Park — 2100 Judiway St, Houston, TX 77018',
       latitude: '29.8088',
@@ -910,7 +910,7 @@ async function seed() {
       id: HAP_FARMERS,
       hostId: ROSA_ID,
       title: 'Heights Farmers Market',
-      description: 'Weekly farmers market in the Heights. Local produce, herbs, honey, baked goods, and artisan products. Several xChangeMakers members will have booths — look for the EU sign to exchange credits!',
+      description: 'Weekly farmers market in the Heights. Local produce, herbs, honey, baked goods, and artisan products. Several xChangeMakers members will have booths — look for the TU sign to exchange time!',
       category: 'markets',
       location: 'Heights Mercantile — 714 Yale St, Houston, TX 77007',
       latitude: '29.7925',
@@ -958,7 +958,7 @@ async function seed() {
       id: HAP_CLEANUP,
       hostId: LAUREN_ID,
       title: 'Oak Forest Community Cleanup',
-      description: 'Quarterly neighborhood cleanup. We will walk the streets, pick up litter, trim overgrown sidewalk edges, and beautify our community. Bags, gloves, and water provided. Earn 15 EU for participating!',
+      description: 'Quarterly neighborhood cleanup. We will walk the streets, pick up litter, trim overgrown sidewalk edges, and beautify our community. Bags, gloves, and water provided. Earn 2 TU for participating!',
       category: 'community',
       location: 'Meet at Oak Forest Park — 2100 Judiway St, Houston, TX 77018',
       latitude: '29.8088',
@@ -1146,7 +1146,7 @@ async function seed() {
       id: TREASURY_OAK_FOREST,
       communityName: 'Oak Forest',
       balance: '7240',
-      tier: 'rooted',
+      tier: 'established',
       exchangesThisWeek: 14,
       totalExchanges: 89,
       totalMembers: 127,
@@ -1247,19 +1247,19 @@ async function seed() {
   console.log('Inserting onboarding progress...')
 
   await db.insert(schema.onboardingProgress).values([
-    { memberId: LAUREN_ID, step: 'profile_photo',  completed: true,  euEarned: 5,  completedAt: daysAgo(45) },
-    { memberId: LAUREN_ID, step: 'intro_vibe',     completed: true,  euEarned: 5,  completedAt: daysAgo(45) },
-    { memberId: LAUREN_ID, step: 'add_offerings',  completed: true,  euEarned: 5,  completedAt: daysAgo(44) },
-    { memberId: LAUREN_ID, step: 'post_need',      completed: true,  euEarned: 5,  completedAt: daysAgo(43) },
-    { memberId: LAUREN_ID, step: 'rsvp_happening', completed: true,  euEarned: 5,  completedAt: daysAgo(40) },
-    { memberId: LAUREN_ID, step: 'first_exchange',  completed: true,  euEarned: 15, completedAt: daysAgo(4) },
-    { memberId: LAUREN_ID, step: 'first_review',   completed: true,  euEarned: 5,  completedAt: daysAgo(4) },
-    { memberId: LAUREN_ID, step: 'invite_neighbor', completed: false, euEarned: 0,  completedAt: null },
+    { memberId: LAUREN_ID, step: 'profile_photo',  completed: true,  tuEarned: 1, completedAt: daysAgo(45) },
+    { memberId: LAUREN_ID, step: 'intro_vibe',     completed: true,  tuEarned: 1, completedAt: daysAgo(45) },
+    { memberId: LAUREN_ID, step: 'add_offerings',  completed: true,  tuEarned: 2, completedAt: daysAgo(44) },
+    { memberId: LAUREN_ID, step: 'post_need',      completed: true,  tuEarned: 1, completedAt: daysAgo(43) },
+    { memberId: LAUREN_ID, step: 'rsvp_happening', completed: true,  tuEarned: 1, completedAt: daysAgo(40) },
+    { memberId: LAUREN_ID, step: 'first_exchange',  completed: true,  tuEarned: 2, completedAt: daysAgo(4) },
+    { memberId: LAUREN_ID, step: 'first_review',   completed: true,  tuEarned: 1, completedAt: daysAgo(4) },
+    { memberId: LAUREN_ID, step: 'invite_neighbor', completed: false, tuEarned: 0, completedAt: null },
   ])
 
   console.log('  8 onboarding steps inserted.')
 
-  // ── 15. Wallet Transactions (Lauren's EU history) ─────────────────────
+  // ── 15. Wallet Transactions (Lauren's TU history) ─────────────────────
   console.log('Inserting wallet transactions...')
 
   await db.insert(schema.walletTransactions).values([
@@ -1270,7 +1270,7 @@ async function seed() {
     { walletId: LAUREN_WALLET, type: 'earned', amount: 5,  description: 'Onboarding bonus: posted a need', createdAt: daysAgo(43) },
     { walletId: LAUREN_WALLET, type: 'earned', amount: 5,  description: 'Onboarding bonus: RSVP\'d to a happening', createdAt: daysAgo(40) },
     // Welcome bonus
-    { walletId: LAUREN_WALLET, type: 'earned', amount: 50, description: 'Welcome to xChangeMakers! Here are your first 50 EU', createdAt: daysAgo(45) },
+    { walletId: LAUREN_WALLET, type: 'earned', amount: 50, description: 'Welcome to xChangeMakers! Here are your first 5 TU', createdAt: daysAgo(45) },
     // Exchange with Maria (tamales)
     { walletId: LAUREN_WALLET, type: 'escrow_hold',    amount: 15, description: 'Escrow held for tamale exchange with Maria', exchangeId: EX_LAUREN_TAMALES, createdAt: daysAgo(5) },
     { walletId: LAUREN_WALLET, type: 'escrow_release',  amount: 15, description: 'Exchange completed: tamales from Maria', exchangeId: EX_LAUREN_TAMALES, createdAt: daysAgo(4) },
@@ -1285,10 +1285,10 @@ async function seed() {
     // Yoga escrow (currently held)
     { walletId: LAUREN_WALLET, type: 'escrow_hold', amount: 25, description: 'Escrow held for yoga session with Priya', exchangeId: EX_LAUREN_YOGA, createdAt: daysAgo(1) },
     // Maria wallet transactions
-    { walletId: MARIA_WALLET, type: 'earned', amount: 50, description: 'Welcome to xChangeMakers! Here are your first 50 EU', createdAt: daysAgo(38) },
+    { walletId: MARIA_WALLET, type: 'earned', amount: 50, description: 'Welcome to xChangeMakers! Here are your first 5 TU', createdAt: daysAgo(38) },
     { walletId: MARIA_WALLET, type: 'earned', amount: 15, description: 'Earned for Fresh Homemade Tamales — Lauren Chen', exchangeId: EX_LAUREN_TAMALES, createdAt: daysAgo(4) },
     // Priya wallet transactions
-    { walletId: PRIYA_WALLET, type: 'earned', amount: 50, description: 'Welcome to xChangeMakers! Here are your first 50 EU', createdAt: daysAgo(35) },
+    { walletId: PRIYA_WALLET, type: 'earned', amount: 50, description: 'Welcome to xChangeMakers! Here are your first 5 TU', createdAt: daysAgo(35) },
     // Sarah & David wallet transactions
     { walletId: SARAH_WALLET, type: 'spent', amount: 15, description: 'Paid David for Bicycle Tune-Up & Repair', exchangeId: EX_SARAH_BIKE, createdAt: daysAgo(9) },
     { walletId: DAVID_WALLET, type: 'earned', amount: 15, description: 'Earned for Bicycle Tune-Up & Repair — Sarah Chen', exchangeId: EX_SARAH_BIKE, createdAt: daysAgo(9) },

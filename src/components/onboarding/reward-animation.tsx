@@ -40,7 +40,7 @@ export function RewardAnimation({ amount, onComplete }: RewardAnimationProps) {
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 pointer-events-none flex items-center justify-center">
-        {/* EU amount floating up */}
+        {/* TU amount floating up */}
         <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.8 }}
           animate={{ opacity: 1, y: -40, scale: 1.1 }}
@@ -51,7 +51,7 @@ export function RewardAnimation({ amount, onComplete }: RewardAnimationProps) {
           }}
           className="absolute text-3xl font-bold text-primary drop-shadow-lg"
         >
-          +{amount} EU
+          +{amount} TU
         </motion.div>
 
         {/* Confetti dots burst */}

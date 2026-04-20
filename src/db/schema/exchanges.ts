@@ -17,7 +17,7 @@ export const exchanges = pgTable('exchanges', {
   providerId: uuid('provider_id').notNull().references(() => members.id),
   requesterId: uuid('requester_id').notNull().references(() => members.id),
   status: exchangeStatusEnum('status').default('requested').notNull(),
-  euAmount: integer('eu_amount').notNull(),
+  tuAmount: integer('tu_amount').notNull(),
   scheduledAt: timestamp('scheduled_at', { withTimezone: true }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),

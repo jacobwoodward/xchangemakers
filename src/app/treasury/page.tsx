@@ -9,27 +9,27 @@ import { CommunityStats } from '@/components/treasury/community-stats'
 import { ProgressBar, Card } from '@/components/ui'
 import { Vote, PiggyBank, Users } from 'lucide-react'
 
-/** Compute progress % toward the next vitality tier. */
+/** Compute progress % toward the next community tier. */
 function tierProgress(balance: number): { percent: number; label: string } {
   if (balance < 1000) {
     return {
       percent: (balance / 1000) * 100,
-      label: `$${balance.toLocaleString()} / $1,000 to Growing`,
+      label: `$${balance.toLocaleString()} / $1,000 to Active`,
     }
   }
   if (balance < 5000) {
     return {
       percent: ((balance - 1000) / 4000) * 100,
-      label: `$${balance.toLocaleString()} / $5,000 to Rooted`,
+      label: `$${balance.toLocaleString()} / $5,000 to Established`,
     }
   }
   if (balance < 10000) {
     return {
       percent: ((balance - 5000) / 5000) * 100,
-      label: `$${balance.toLocaleString()} / $10,000 to Thriving`,
+      label: `$${balance.toLocaleString()} / $10,000 to Strong`,
     }
   }
-  return { percent: 100, label: 'Thriving tier reached!' }
+  return { percent: 100, label: 'Strong tier reached!' }
 }
 
 const HOW_IT_WORKS = [
@@ -43,7 +43,7 @@ const HOW_IT_WORKS = [
     Icon: Vote,
     title: 'When we reach $10,000, a community vote unlocks',
     description:
-      'The treasury stays locked until the community collectively grows it to the Thriving tier.',
+      'The treasury stays locked until the community collectively grows it to the Strong tier.',
   },
   {
     Icon: Users,

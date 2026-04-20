@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { CalendarDays, Zap, Clock, User } from 'lucide-react'
+import { CalendarDays, Clock, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, Avatar, Button, StatusStepper, Badge } from '@/components/ui'
 import { EscrowIndicator } from './escrow-indicator'
@@ -126,19 +126,19 @@ export function ExchangeStatusCard({
           </div>
         )}
 
-        {/* EU Amount */}
+        {/* TU Amount */}
         <div className="flex items-center gap-2">
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10">
-            <Zap size={14} className="text-primary" />
+            <Clock size={14} className="text-primary" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted">Amount</p>
             <p className="text-sm font-bold text-primary tabular-nums">
-              {exchange.euAmount} EU
+              {exchange.tuAmount} TU
             </p>
           </div>
           {(exchange.status === 'in_escrow' || exchange.status === 'requested' || exchange.status === 'accepted') && (
-            <EscrowIndicator amount={exchange.euAmount} />
+            <EscrowIndicator amount={exchange.tuAmount} />
           )}
         </div>
 

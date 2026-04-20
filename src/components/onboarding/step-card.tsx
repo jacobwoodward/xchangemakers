@@ -18,65 +18,75 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { OnboardingProgress, OnboardingStep } from '@/lib/exchange-engine/types'
+import { ONBOARDING_TU_REWARDS } from '@/lib/exchange-engine/constants'
 
 // ---- Step metadata ----------------------------------------------------------
 
 interface StepInfo {
   title: string
   description: string
-  eu: number
+  tu: number
   icon: LucideIcon
 }
 
+function makeInfo(
+  title: string,
+  description: string,
+  step: OnboardingStep,
+  icon: LucideIcon,
+): StepInfo {
+  return { title, description, tu: ONBOARDING_TU_REWARDS[step], icon }
+}
+
 export const STEP_INFO: Record<OnboardingStep, StepInfo> = {
-  profile_photo: {
-    title: 'Add a photo',
-    description: 'Let your neighbors see who you are',
-    eu: 5,
-    icon: Camera,
-  },
-  intro_vibe: {
-    title: 'Share your vibe',
-    description: 'Write a short intro and your vibe tagline',
-    eu: 5,
-    icon: Sparkles,
-  },
-  add_offerings: {
-    title: 'List 3 offerings',
-    description: 'What can you offer your neighbors?',
-    eu: 5,
-    icon: Package,
-  },
-  post_need: {
-    title: 'Post a need',
-    description: 'What do you need from your community?',
-    eu: 5,
-    icon: CircleHelp,
-  },
-  rsvp_happening: {
-    title: 'RSVP to a happening',
-    description: 'Find an event and say you\'re going',
-    eu: 5,
-    icon: Calendar,
-  },
-  first_exchange: {
-    title: 'Complete your first exchange',
-    description: 'The real unlock — book and complete an exchange',
-    eu: 15,
-    icon: Handshake,
-  },
-  first_review: {
-    title: 'Leave a review',
-    description: 'Close the trust loop with your first review',
-    eu: 5,
-    icon: Star,
-  },
-  invite_neighbor: {
-    title: 'Invite a neighbor',
-    description: 'Bring someone you know into the community',
-    eu: 10,
-    icon: UserPlus,
-  },
+  profile_photo: makeInfo(
+    'Add a photo',
+    'Let your neighbors see who you are',
+    'profile_photo',
+    Camera,
+  ),
+  intro_vibe: makeInfo(
+    'Share your vibe',
+    'Write a short intro and your vibe tagline',
+    'intro_vibe',
+    Sparkles,
+  ),
+  add_offerings: makeInfo(
+    'List 3 offerings',
+    'What can you offer your neighbors?',
+    'add_offerings',
+    Package,
+  ),
+  post_need: makeInfo(
+    'Post a need',
+    'What do you need from your community?',
+    'post_need',
+    CircleHelp,
+  ),
+  rsvp_happening: makeInfo(
+    'RSVP to a happening',
+    "Find an event and say you're going",
+    'rsvp_happening',
+    Calendar,
+  ),
+  first_exchange: makeInfo(
+    'Complete your first exchange',
+    'The real unlock — book and complete an exchange',
+    'first_exchange',
+    Handshake,
+  ),
+  first_review: makeInfo(
+    'Leave a review',
+    'Close the trust loop with your first review',
+    'first_review',
+    Star,
+  ),
+  invite_neighbor: makeInfo(
+    'Invite a neighbor',
+    'Bring someone you know into the community',
+    'invite_neighbor',
+    UserPlus,
+  ),
 }
 
 // ---- Component --------------------------------------------------------------
@@ -144,15 +154,20 @@ export function StepCard({ step, status, index, onAction }: StepCardProps) {
                 {info.title}
               </h3>
 
-              {/* EU badge */}
+              {/* TU badge */}
               {status === 'completed' && (
                 <Badge variant="primary" className="bg-success/15 text-success">
-                  +{info.eu} EU
+                  +{info.tu} TU
                 </Badge>
               )}
               {status === 'active' && (
                 <Badge variant="accent">
-                  Earn +{info.eu} EU
+                  Earn +{info.tu} TU
+                </Badge>
+              )}
+              {status === 'locked' && (
+                <Badge variant="outline" className="opacity-75">
+                  +{info.tu} TU
                 </Badge>
               )}
             </div>

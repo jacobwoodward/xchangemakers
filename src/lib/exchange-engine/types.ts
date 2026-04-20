@@ -69,7 +69,7 @@ export type TransactionType =
   | 'escrow_release'
   | 'escrow_return'
 
-export type VitalityTier = 'sprouting' | 'growing' | 'rooted' | 'thriving'
+export type CommunityTier = 'starting' | 'active' | 'established' | 'strong'
 
 export type OnboardingStep =
   | 'profile_photo'
@@ -119,8 +119,8 @@ export interface MemberWithDetails extends Member {
 }
 
 /**
- * A member's Exchange Unit (EU) wallet. Tracks balance, lifetime earnings,
- * monthly earnings, and funds currently held in escrow.
+ * A member's Time Unit (TU) wallet. 1 TU ≈ 1 hour of community time.
+ * Tracks balance, lifetime earnings, monthly earnings, and funds held in escrow.
  */
 export interface Wallet {
   id: string
@@ -163,7 +163,7 @@ export interface Listing {
 
 /**
  * An exchange is a transaction between two members — a requester asks a
- * provider for something, EUs move through escrow, and both parties review.
+ * provider for something, TUs move through escrow, and both parties review.
  */
 export interface Exchange {
   id: string
@@ -171,7 +171,7 @@ export interface Exchange {
   providerId: string
   requesterId: string
   status: ExchangeStatus
-  euAmount: number
+  tuAmount: number
   scheduledAt: string | null
   completedAt: string | null
   createdAt: string
@@ -259,26 +259,26 @@ export interface ActivityFeedItem {
 }
 
 /**
- * The community treasury — tracks collective EU balance, vitality tier, and
+ * The community treasury — tracks collective TU balance, community tier, and
  * aggregate exchange statistics. One record per community.
  */
 export interface TreasuryInfo {
   id: string
   communityName: string
   balance: number
-  tier: VitalityTier
+  tier: CommunityTier
   exchangesThisWeek: number
   totalExchanges: number
   totalMembers: number
 }
 
-/** A member's progress on a single onboarding step in the EU Trail. */
+/** A member's progress on a single onboarding step in the Trail. */
 export interface OnboardingProgress {
   id: string
   memberId: string
   step: OnboardingStep
   completed: boolean
-  euEarned: number
+  tuEarned: number
   completedAt: string | null
 }
 
@@ -350,7 +350,7 @@ export interface CreateListingInput {
 export interface CreateExchangeInput {
   listingId: string
   providerId: string
-  euAmount: number
+  tuAmount: number
   scheduledAt?: string
 }
 

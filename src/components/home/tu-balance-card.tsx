@@ -1,21 +1,21 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { Zap } from 'lucide-react'
+import { Clock } from 'lucide-react'
 
-interface EuBalanceCardProps {
+interface TuBalanceCardProps {
   balance: number
   monthlyEarned: number
   escrowHeld: number
 }
 
-const MONTHLY_CAP = 200
+const MONTHLY_CAP = 20
 
-export function EuBalanceCard({
+export function TuBalanceCard({
   balance,
   monthlyEarned,
   escrowHeld,
-}: EuBalanceCardProps) {
+}: TuBalanceCardProps) {
   return (
     <motion.div
       initial={{ scale: 0.97, opacity: 0 }}
@@ -38,14 +38,14 @@ export function EuBalanceCard({
         {/* Header row */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Zap size={16} className="text-white/70" />
+            <Clock size={16} className="text-white/70" />
             <span className="text-sm font-medium text-white/70">
-              Energy Units
+              Time Units
             </span>
           </div>
           {escrowHeld > 0 && (
             <span className="text-xs font-medium text-white/50 tabular-nums">
-              {escrowHeld} EU in escrow
+              {escrowHeld} TU in escrow
             </span>
           )}
         </div>
@@ -53,7 +53,10 @@ export function EuBalanceCard({
         {/* Big balance */}
         <p className="mt-2 text-4xl font-bold tracking-tight text-white tabular-nums">
           {balance}{' '}
-          <span className="text-lg font-semibold text-white/60">EU</span>
+          <span className="text-lg font-semibold text-white/60">TU</span>
+        </p>
+        <p className="mt-1 text-xs text-white/50">
+          1 TU ≈ 1 hour of community time
         </p>
 
         {/* Monthly progress */}
@@ -67,7 +70,7 @@ export function EuBalanceCard({
             />
           </div>
           <span className="text-xs font-medium text-white/60 tabular-nums whitespace-nowrap">
-            {monthlyEarned} / {MONTHLY_CAP} EU this month
+            {monthlyEarned} / {MONTHLY_CAP} TU this month
           </span>
         </div>
       </div>

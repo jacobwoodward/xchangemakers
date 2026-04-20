@@ -1,35 +1,35 @@
 import { Badge, ProgressBar, Card } from '@/components/ui'
-import { Trees } from 'lucide-react'
-import type { TreasuryInfo, VitalityTier } from '@/lib/exchange-engine/types'
+import { Users } from 'lucide-react'
+import type { TreasuryInfo, CommunityTier } from '@/lib/exchange-engine/types'
 
 interface TreasuryProgressProps {
   treasury: TreasuryInfo
 }
 
 const TIER_CONFIG: Record<
-  VitalityTier,
+  CommunityTier,
   { label: string; threshold: number; next: string | null; nextThreshold: number }
 > = {
-  sprouting: {
-    label: 'Sprouting',
+  starting: {
+    label: 'Starting',
     threshold: 0,
-    next: 'Growing',
+    next: 'Active',
     nextThreshold: 5000,
   },
-  growing: {
-    label: 'Growing',
+  active: {
+    label: 'Active',
     threshold: 5000,
-    next: 'Rooted',
+    next: 'Established',
     nextThreshold: 10000,
   },
-  rooted: {
-    label: 'Rooted',
+  established: {
+    label: 'Established',
     threshold: 10000,
-    next: 'Thriving',
+    next: 'Strong',
     nextThreshold: 25000,
   },
-  thriving: {
-    label: 'Thriving',
+  strong: {
+    label: 'Strong',
     threshold: 25000,
     next: null,
     nextThreshold: 25000,
@@ -60,7 +60,7 @@ export function TreasuryProgress({ treasury }: TreasuryProgressProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-            <Trees size={18} className="text-primary" />
+            <Users size={18} className="text-primary" />
           </div>
           <div>
             <p className="text-sm font-semibold text-heading leading-tight">
