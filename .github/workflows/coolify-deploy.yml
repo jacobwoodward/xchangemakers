@@ -1,0 +1,30 @@
+name: Trigger Coolify Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force redeploy even if no changes"
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Coolify deploy webhook
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_URL: http://178.156.184.83:8000
+          APP_UUID: oc97gefkhu40w5fzkjdtnr88
+          FORCE: ${{ inputs.force || 'false' }}
+        run: |
+          if [ -z "$COOLIFY_TOKEN" ]; then
+            echo "::error::COOLIFY_TOKEN secret is not set. Add it under Repo Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          curl -fSL --retry 3 --retry-delay 5 \
+            -H "Authorization: Bearer $COOLIFY_TOKEN" \
+            "$COOLIFY_URL/api/v1/deploy?uuid=$APP_UUID&force=$FORCE"
