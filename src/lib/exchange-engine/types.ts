@@ -97,6 +97,7 @@ export interface Member {
   avatarUrl: string | null
   bio: string | null
   vibe: string | null
+  communityId: string | null
   neighborhood: string
   latitude: number
   longitude: number
@@ -324,6 +325,26 @@ export interface SearchFilters {
   category?: ListingCategory
   radius?: number
   type?: ListingType
+}
+
+export type MarketplaceDistanceScope = 'community' | 'nearby' | 'all'
+export type MarketplaceSort = 'newest' | 'credits_low' | 'credits_high'
+
+export interface MarketplaceListingFilters extends SearchFilters {
+  availabilityType?: AvailabilityType
+  minCredits?: number
+  maxCredits?: number
+  trustedOnly?: boolean
+  distance?: MarketplaceDistanceScope
+  sort?: MarketplaceSort
+  excludeCurrentMember?: boolean
+  limit?: number
+}
+
+export interface SuggestedListingMatch {
+  listing: Listing
+  score: number
+  reasons: string[]
 }
 
 /**

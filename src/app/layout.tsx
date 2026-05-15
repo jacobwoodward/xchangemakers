@@ -3,7 +3,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'xChangeMakers',
-  description: 'Exchange skills, build community',
+  description: 'Ask for help, offer help, and build trusted local exchange',
 }
 
 export const viewport: Viewport = {

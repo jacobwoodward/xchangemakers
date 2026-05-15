@@ -17,7 +17,7 @@ export function TrailProgress({ steps }: TrailProgressProps) {
       <div className="flex items-baseline justify-between mb-1">
         <h2 className="text-lg font-semibold text-heading">Your Trail</h2>
         <span className="text-sm font-semibold tabular-nums text-primary">
-          {tuEarned} / {TOTAL_ONBOARDING_TU} TU
+          {tuEarned} / {TOTAL_ONBOARDING_TU} credits
         </span>
       </div>
 
@@ -27,7 +27,7 @@ export function TrailProgress({ steps }: TrailProgressProps) {
           <>
             {' '}·{' '}
             <span className="font-medium text-secondary">
-              {remaining} TU to go
+              {remaining} credits to go
             </span>
           </>
         )}

@@ -2,12 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { exchangeEngine } from '@/lib/exchange-engine'
-import type {
-  CreateListingInput,
-  ListingCategory,
-  ListingType,
-  AvailabilityType,
-} from '@/lib/exchange-engine'
+import type { CreateListingInput } from '@/lib/exchange-engine'
 
 export async function createListingAction(
   input: CreateListingInput,
@@ -17,6 +12,9 @@ export async function createListingAction(
     const listing = await exchangeEngine.createListing(input)
     revalidatePath('/profile')
     revalidatePath('/search')
+    revalidatePath('/needs')
+    revalidatePath('/offers')
+    revalidatePath(`/listing/${listing.id}/matches`)
     return { id: listing.id }
   } catch (err) {
     return {
@@ -34,7 +32,10 @@ export async function updateListingAction(
     const listing = await exchangeEngine.updateListing(id, input)
     revalidatePath('/profile')
     revalidatePath(`/listing/${id}`)
+    revalidatePath(`/listing/${id}/matches`)
     revalidatePath('/search')
+    revalidatePath('/needs')
+    revalidatePath('/offers')
     return { id: listing.id }
   } catch (err) {
     return {
@@ -51,6 +52,8 @@ export async function deleteListingAction(
     await exchangeEngine.deleteListing(id)
     revalidatePath('/profile')
     revalidatePath('/search')
+    revalidatePath('/needs')
+    revalidatePath('/offers')
     return { ok: true }
   } catch (err) {
     return {
@@ -58,5 +61,3 @@ export async function deleteListingAction(
     }
   }
 }
-
-export type { ListingCategory, ListingType, AvailabilityType }

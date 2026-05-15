@@ -4,9 +4,52 @@
  * Runs schema creation + seed data in pure Node.js CJS.
  */
 
+const crypto = require('crypto');
 const postgres = require('postgres');
 
 const sql = postgres(process.env.DATABASE_URL);
+const DEMO_PASSWORD_HASH = hashPasswordSync('password');
+const COMMUNITY_SEEDS = [
+  {
+    id: '90000000-0000-4000-8000-000000000001',
+    name: 'Oak Forest',
+    slug: 'oak-forest',
+    city: 'Houston',
+    region: 'TX',
+    postalCode: '77018',
+    latitude: '29.8105000',
+    longitude: '-95.4100000',
+    inviteCode: 'OAK-FOREST',
+  },
+  {
+    id: '90000000-0000-4000-8000-000000000002',
+    name: 'Garden Oaks',
+    slug: 'garden-oaks',
+    city: 'Houston',
+    region: 'TX',
+    postalCode: '77018',
+    latitude: '29.8085000',
+    longitude: '-95.4050000',
+    inviteCode: 'GARDEN-OAKS',
+  },
+  {
+    id: '90000000-0000-4000-8000-000000000003',
+    name: 'Heights',
+    slug: 'heights',
+    city: 'Houston',
+    region: 'TX',
+    postalCode: '77008',
+    latitude: '29.8000000',
+    longitude: '-95.3980000',
+    inviteCode: 'HEIGHTS',
+  },
+];
+
+function hashPasswordSync(password) {
+  const salt = 'local-demo-auth-salt';
+  const key = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `scrypt:${salt}:${key}`;
+}
 
 async function run() {
   // Apply idempotent migrations first — safe to run on any schema version.
@@ -23,6 +66,8 @@ async function run() {
     // Schema exists, check if seeded
     const members = await sql`SELECT count(*)::int as c FROM members`;
     if (members[0].c > 0) {
+      await seedCommunities();
+      await seedAuthAccounts();
       console.log(`Database ready: ${members[0].c} members found`);
       await sql.end();
       return;
@@ -36,6 +81,8 @@ async function run() {
 
   console.log('Seeding data...');
   await seedData();
+  await seedCommunities();
+  await seedAuthAccounts();
   console.log('Seed complete');
 
   await sql.end();
@@ -93,6 +140,96 @@ async function migrate() {
       END IF;
     END $$;
   `);
+
+  await ensureCommunityTables();
+  await seedCommunities();
+  await ensureAuthTables();
+}
+
+async function ensureCommunityTables() {
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS communities (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      name varchar(255) NOT NULL UNIQUE,
+      slug varchar(120) NOT NULL UNIQUE,
+      city varchar(120) NOT NULL,
+      region varchar(80) NOT NULL,
+      postal_code varchar(20),
+      center_latitude decimal(10,7) NOT NULL,
+      center_longitude decimal(10,7) NOT NULL,
+      status varchar(24) NOT NULL DEFAULT 'active',
+      invite_only boolean NOT NULL DEFAULT false,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS community_invites (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      community_id uuid NOT NULL REFERENCES communities(id),
+      code varchar(64) NOT NULL UNIQUE,
+      label varchar(255) NOT NULL,
+      max_uses integer,
+      usage_count integer NOT NULL DEFAULT 0,
+      expires_at timestamptz,
+      is_active boolean NOT NULL DEFAULT true,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS community_invites_community_id_idx ON community_invites(community_id);
+    CREATE INDEX IF NOT EXISTS communities_status_idx ON communities(status);
+  `);
+
+  const membersTable = await sql`
+    SELECT count(*)::int as c FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'members'
+  `;
+
+  if (membersTable[0].c === 0) return;
+
+  await sql.unsafe(`
+    DO $$ BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'members'
+          AND column_name = 'community_id'
+      ) THEN
+        ALTER TABLE members ADD COLUMN community_id uuid REFERENCES communities(id);
+      END IF;
+    END $$;
+  `);
+}
+
+async function ensureAuthTables() {
+  const membersTable = await sql`
+    SELECT count(*)::int as c FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'members'
+  `;
+
+  if (membersTable[0].c === 0) return;
+
+  await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS auth_accounts (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      member_id uuid NOT NULL UNIQUE REFERENCES members(id) ON DELETE CASCADE,
+      email varchar(255) NOT NULL UNIQUE,
+      password_hash text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      account_id uuid NOT NULL REFERENCES auth_accounts(id) ON DELETE CASCADE,
+      token_hash varchar(64) NOT NULL UNIQUE,
+      expires_at timestamptz NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS auth_sessions_token_hash_idx ON auth_sessions(token_hash);
+    CREATE INDEX IF NOT EXISTS auth_sessions_expires_at_idx ON auth_sessions(expires_at);
+  `);
 }
 
 async function createSchema() {
@@ -141,6 +278,34 @@ async function createSchema() {
 
   // Create tables
   await sql.unsafe(`
+    CREATE TABLE IF NOT EXISTS communities (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      name varchar(255) NOT NULL UNIQUE,
+      slug varchar(120) NOT NULL UNIQUE,
+      city varchar(120) NOT NULL,
+      region varchar(80) NOT NULL,
+      postal_code varchar(20),
+      center_latitude decimal(10,7) NOT NULL,
+      center_longitude decimal(10,7) NOT NULL,
+      status varchar(24) NOT NULL DEFAULT 'active',
+      invite_only boolean NOT NULL DEFAULT false,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS community_invites (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      community_id uuid NOT NULL REFERENCES communities(id),
+      code varchar(64) NOT NULL UNIQUE,
+      label varchar(255) NOT NULL,
+      max_uses integer,
+      usage_count integer NOT NULL DEFAULT 0,
+      expires_at timestamptz,
+      is_active boolean NOT NULL DEFAULT true,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS members (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       first_name varchar(100) NOT NULL,
@@ -149,6 +314,7 @@ async function createSchema() {
       avatar_url varchar(500),
       bio text,
       vibe varchar(200),
+      community_id uuid REFERENCES communities(id),
       neighborhood varchar(200) NOT NULL,
       latitude decimal(10,7) NOT NULL DEFAULT 0,
       longitude decimal(10,7) NOT NULL DEFAULT 0,
@@ -414,6 +580,94 @@ async function seedData() {
     (${LAUREN}, 'first_review', true, 1, now() - interval '3 days'),
     (${LAUREN}, 'invite_neighbor', false, 0, null)
   `;
+}
+
+async function seedCommunities() {
+  for (const community of COMMUNITY_SEEDS) {
+    await sql`
+      INSERT INTO communities (
+        id,
+        name,
+        slug,
+        city,
+        region,
+        postal_code,
+        center_latitude,
+        center_longitude,
+        status,
+        invite_only
+      )
+      VALUES (
+        ${community.id},
+        ${community.name},
+        ${community.slug},
+        ${community.city},
+        ${community.region},
+        ${community.postalCode},
+        ${community.latitude},
+        ${community.longitude},
+        'active',
+        false
+      )
+      ON CONFLICT (slug) DO UPDATE SET
+        name = EXCLUDED.name,
+        city = EXCLUDED.city,
+        region = EXCLUDED.region,
+        postal_code = EXCLUDED.postal_code,
+        center_latitude = EXCLUDED.center_latitude,
+        center_longitude = EXCLUDED.center_longitude,
+        status = EXCLUDED.status,
+        updated_at = now()
+    `;
+
+    await sql`
+      INSERT INTO community_invites (community_id, code, label)
+      VALUES (${community.id}, ${community.inviteCode}, ${`${community.name} neighborhood invite`})
+      ON CONFLICT (code) DO UPDATE SET
+        community_id = EXCLUDED.community_id,
+        label = EXCLUDED.label,
+        is_active = true,
+        updated_at = now()
+    `;
+  }
+
+  const membersTable = await sql`
+    SELECT count(*)::int as c FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'members'
+  `;
+
+  if (membersTable[0].c === 0) return;
+
+  await sql.unsafe(`
+    UPDATE members m
+    SET community_id = c.id
+    FROM communities c
+    WHERE m.community_id IS NULL
+      AND lower(m.neighborhood) = lower(c.name);
+
+    UPDATE members
+    SET community_id = (SELECT id FROM communities WHERE slug = 'oak-forest')
+    WHERE community_id IS NULL;
+  `);
+}
+
+async function seedAuthAccounts() {
+  await ensureAuthTables();
+
+  const members = await sql`
+    SELECT id, lower(email) as email FROM members
+    WHERE email IS NOT NULL
+  `;
+
+  if (members.length === 0) return;
+
+  for (const member of members) {
+    await sql`
+      INSERT INTO auth_accounts (member_id, email, password_hash)
+      VALUES (${member.id}, ${member.email}, ${DEMO_PASSWORD_HASH})
+      ON CONFLICT (email) DO NOTHING
+    `;
+  }
 }
 
 run().catch(err => {

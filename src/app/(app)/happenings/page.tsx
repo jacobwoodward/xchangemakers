@@ -40,13 +40,13 @@ export default function HappeningsPage() {
             className="text-2xl font-bold tracking-tight"
             style={{ color: 'var(--xm-text-heading)' }}
           >
-            Happenings
+            Exchange Events
           </h1>
           <p
             className="mt-1 text-sm"
             style={{ color: 'var(--xm-text-secondary)' }}
           >
-            Events, workshops & community moments
+            Meetups that help neighbors turn needs and offers into real exchanges
           </p>
         </div>
 

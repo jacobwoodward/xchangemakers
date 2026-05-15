@@ -8,32 +8,37 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "dev:db:local": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-local-postgres.ps1",
+    "smoke:auth": "node scripts/auth-smoke.mjs",
+    "smoke:auth:browser": "playwright test scripts/auth-browser-smoke.spec.ts --reporter=line",
+    "smoke:marketplace": "playwright test scripts/marketplace-browser-smoke.spec.ts --reporter=line",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "next": "^16.2.1",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "framer-motion": "^12.6.0",
-    "lucide-react": "^0.469.0",
-    "zustand": "^5.0.3",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^3.0.2",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.40.0",
-    "postgres": "^3.4.5"
+    "framer-motion": "^12.6.0",
+    "lucide-react": "^0.469.0",
+    "next": "^16.2.1",
+    "postgres": "^3.4.5",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tailwind-merge": "^3.0.2",
+    "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "tailwindcss": "^4.1.0",
-    "typescript": "^5.8.0",
     "drizzle-kit": "^0.30.0",
-    "tsx": "^4.19.0"
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
   }
 }

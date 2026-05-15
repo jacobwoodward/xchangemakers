@@ -2,15 +2,21 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Search, Calendar, Activity, User } from 'lucide-react'
+import {
+  ArrowRightLeft,
+  CircleHelp,
+  HandHeart,
+  MessageCircle,
+  User,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const tabs = [
-  { label: 'Home', icon: Home, path: '/' },
-  { label: 'Search', icon: Search, path: '/search' },
-  { label: 'Happenings', icon: Calendar, path: '/happenings' },
-  { label: 'Activity', icon: Activity, path: '/activity' },
-  { label: 'Profile', icon: User, path: '/profile' },
+  { label: 'Needs', icon: CircleHelp, path: '/needs' },
+  { label: 'Offers', icon: HandHeart, path: '/offers' },
+  { label: 'Exchanges', icon: ArrowRightLeft, path: '/exchanges' },
+  { label: 'Messages', icon: MessageCircle, path: '/messages' },
+  { label: 'Me', icon: User, path: '/profile' },
 ] as const
 
 export function BottomNav() {
@@ -32,8 +38,7 @@ export function BottomNav() {
         }}
       >
         {tabs.map(({ label, icon: Icon, path }) => {
-          const isActive =
-            path === '/' ? pathname === '/' : pathname.startsWith(path)
+          const isActive = pathname.startsWith(path)
 
           return (
             <Link

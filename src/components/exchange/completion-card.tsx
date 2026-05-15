@@ -99,7 +99,8 @@ export function CompletionCard({
         <h2 className="text-2xl font-bold text-heading">Exchange Complete!</h2>
         <p className="text-sm text-secondary">
           <span className="font-semibold text-primary tabular-nums">
-            {exchange.tuAmount} TU
+            {exchange.tuAmount}{' '}
+            {exchange.tuAmount === 1 ? 'credit' : 'credits'}
           </span>
           {' '}transferred to {provider.firstName}
         </p>

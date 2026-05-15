@@ -5,6 +5,8 @@
  */
 import { relations } from 'drizzle-orm'
 import { members } from './members'
+import { authAccounts } from './auth'
+import { communities, communityInvites } from './communities'
 import { wallets, walletTransactions } from './wallets'
 import { listings } from './listings'
 import { exchanges } from './exchanges'
@@ -35,6 +37,24 @@ export const membersRelations = relations(members, ({ one, many }) => ({
   availabilitySlots: many(availabilitySlots),
   conversationParticipants: many(conversationParticipants),
   messagesSent: many(messages),
+  authAccount: one(authAccounts),
+  community: one(communities, {
+    fields: [members.communityId],
+    references: [communities.id],
+  }),
+}))
+
+// ── Communities ────────────────────────────────────────────────────────
+export const communitiesRelations = relations(communities, ({ many }) => ({
+  members: many(members),
+  invites: many(communityInvites),
+}))
+
+export const communityInvitesRelations = relations(communityInvites, ({ one }) => ({
+  community: one(communities, {
+    fields: [communityInvites.communityId],
+    references: [communities.id],
+  }),
 }))
 
 // ── Wallets ────────────────────────────────────────────────────────────

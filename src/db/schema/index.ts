@@ -1,4 +1,6 @@
 export * from './members'
+export * from './auth'
+export * from './communities'
 export * from './wallets'
 export * from './listings'
 export * from './exchanges'

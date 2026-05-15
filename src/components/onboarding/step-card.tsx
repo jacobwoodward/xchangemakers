@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Camera,
@@ -98,9 +99,18 @@ interface StepCardProps {
   status: StepStatus
   index: number
   onAction?: () => void
+  actionHref?: string
+  actionLabel?: string
 }
 
-export function StepCard({ step, status, index, onAction }: StepCardProps) {
+export function StepCard({
+  step,
+  status,
+  index,
+  onAction,
+  actionHref,
+  actionLabel,
+}: StepCardProps) {
   const info = STEP_INFO[step.step]
   const Icon = info.icon
 
@@ -154,20 +164,20 @@ export function StepCard({ step, status, index, onAction }: StepCardProps) {
                 {info.title}
               </h3>
 
-              {/* TU badge */}
+              {/* Credit badge */}
               {status === 'completed' && (
                 <Badge variant="primary" className="bg-success/15 text-success">
-                  +{info.tu} TU
+                  +{info.tu}
                 </Badge>
               )}
               {status === 'active' && (
                 <Badge variant="accent">
-                  Earn +{info.tu} TU
+                  Earn +{info.tu}
                 </Badge>
               )}
               {status === 'locked' && (
                 <Badge variant="outline" className="opacity-75">
-                  +{info.tu} TU
+                  +{info.tu}
                 </Badge>
               )}
             </div>
@@ -189,19 +199,32 @@ export function StepCard({ step, status, index, onAction }: StepCardProps) {
             )}
 
             {/* CTA for active step */}
-            {status === 'active' && onAction && (
+            {status === 'active' && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.15 }}
               >
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={onAction}
-                >
-                  {info.title}
-                </Button>
+                {actionHref ? (
+                  <Link
+                    href={actionHref}
+                    className="inline-flex h-8 items-center justify-center rounded-full bg-primary px-3 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-dark"
+                  >
+                    {actionLabel ?? info.title}
+                  </Link>
+                ) : onAction ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={onAction}
+                  >
+                    {actionLabel ?? info.title}
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="sm" disabled>
+                    Coming soon
+                  </Button>
+                )}
               </motion.div>
             )}
           </div>

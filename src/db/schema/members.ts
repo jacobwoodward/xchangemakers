@@ -1,4 +1,5 @@
 import { pgTable, pgEnum, uuid, varchar, text, decimal, boolean, timestamp } from 'drizzle-orm/pg-core'
+import { communities } from './communities'
 
 export const membershipTypeEnum = pgEnum('membership_type', [
   'standard',
@@ -14,6 +15,7 @@ export const members = pgTable('members', {
   avatarUrl: varchar('avatar_url', { length: 500 }),
   bio: text('bio'),
   vibe: varchar('vibe', { length: 200 }),
+  communityId: uuid('community_id').references(() => communities.id),
   neighborhood: varchar('neighborhood', { length: 255 }).notNull(),
   latitude: decimal('latitude').notNull(),
   longitude: decimal('longitude').notNull(),

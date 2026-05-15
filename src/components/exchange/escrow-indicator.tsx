@@ -17,7 +17,7 @@ export function EscrowIndicator({ amount, className }: EscrowIndicatorProps) {
       )}
     >
       <Lock size={12} />
-      <span>{amount} TU in escrow</span>
+      <span>{amount} {amount === 1 ? 'credit' : 'credits'} held</span>
     </div>
   )
 }

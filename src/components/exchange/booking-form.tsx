@@ -99,7 +99,7 @@ export function BookingForm({
         />
       </Card>
 
-      {/* ─── TU amount ─── */}
+      {/* ─── Credit amount ─── */}
       <Card>
         <div className="flex items-center justify-between">
           <div>
@@ -111,7 +111,9 @@ export function BookingForm({
               <span className="text-2xl font-bold text-primary tabular-nums">
                 {listing.creditPrice}
               </span>
-              <span className="text-sm font-semibold text-primary/60">TU</span>
+              <span className="text-sm font-semibold text-primary/60">
+                {listing.creditPrice === 1 ? 'credit' : 'credits'}
+              </span>
             </div>
           </div>
           <div className="text-right">
@@ -122,7 +124,7 @@ export function BookingForm({
                 hasSufficientBalance ? 'text-heading' : 'text-error',
               )}
             >
-              {walletBalance} TU
+              {walletBalance} credits
             </p>
           </div>
         </div>
@@ -131,7 +133,7 @@ export function BookingForm({
           <div className="flex items-center gap-2 mt-3 px-3 py-2.5 rounded-lg bg-error/8 border border-error/15">
             <AlertCircle size={16} className="text-error shrink-0" />
             <p className="text-xs text-error font-medium">
-              Insufficient balance. You need {listing.creditPrice - walletBalance} more TU.
+              Insufficient balance. You need {listing.creditPrice - walletBalance} more credits.
             </p>
           </div>
         )}
@@ -139,7 +141,7 @@ export function BookingForm({
 
       {/* ─── Escrow notice ─── */}
       <p className="text-xs text-center text-muted leading-relaxed px-4">
-        TU will be held in escrow until the exchange is marked complete by both parties.
+        Credits will be held until the exchange is marked complete by both parties.
       </p>
 
       {/* ─── Error ─── */}

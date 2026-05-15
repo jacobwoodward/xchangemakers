@@ -34,14 +34,14 @@ export default function WelcomePage() {
 
       {/* Description */}
       <p className="text-body text-[15px] leading-relaxed max-w-[300px] mb-12">
-        Join your neighbors in building a local exchange network. No money
-        needed — just energy, skills, and generosity.
+        Join your neighbors in a trusted exchange network. Ask for help, offer
+        what you can, and keep things fair with community credits.
       </p>
 
       {/* CTA */}
       <div className="w-full max-w-[280px] space-y-4">
         <Link
-          href="/onboarding"
+          href="/sign-up"
           className="flex items-center justify-center w-full h-12 rounded-full bg-primary text-primary-foreground font-medium text-base shadow-sm hover:bg-primary-dark active:bg-primary-dark transition-colors"
         >
           Get Started
@@ -49,7 +49,7 @@ export default function WelcomePage() {
 
         <p className="text-sm text-muted">
           Already a member?{' '}
-          <Link href="#" className="text-primary font-medium hover:underline">
+          <Link href="/sign-in" className="text-primary font-medium hover:underline">
             Sign in
           </Link>
         </p>

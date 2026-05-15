@@ -70,7 +70,8 @@ function ListingRow({ listing }: { listing: Listing }) {
           </Link>
           <div className="flex items-center gap-1 shrink-0">
             <span className="text-sm font-bold text-primary tabular-nums whitespace-nowrap">
-              {listing.creditPrice} TU
+              {listing.creditPrice}{' '}
+              {listing.creditPrice === 1 ? 'credit' : 'credits'}
             </span>
             <button
               type="button"

@@ -26,7 +26,8 @@ import {
   conversationParticipants,
   messages,
 } from '@/db/schema'
-import { eq, ilike, and, or, desc, sql, asc } from 'drizzle-orm'
+import { eq, ilike, and, or, desc, sql, asc, gte, lte, ne } from 'drizzle-orm'
+import { requireCurrentMemberId } from '@/lib/auth/session'
 
 import type {
   Member,
@@ -52,6 +53,8 @@ import type {
   Message,
   SearchFilters,
   SearchResult,
+  MarketplaceListingFilters,
+  SuggestedListingMatch,
   CreateExchangeInput,
   CreateBookingInput,
   CreateReviewInput,
@@ -78,6 +81,7 @@ function toMember(row: typeof members.$inferSelect): Member {
     avatarUrl: row.avatarUrl ?? null,
     bio: row.bio ?? null,
     vibe: row.vibe ?? null,
+    communityId: row.communityId ?? null,
     neighborhood: row.neighborhood,
     latitude: Number(row.latitude),
     longitude: Number(row.longitude),
@@ -184,6 +188,19 @@ function toHappening(
   }
 }
 
+function getDistanceMiles(from: Member, to: Member): number {
+  const earthRadiusMiles = 3958.8
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180
+  const deltaLat = toRadians(to.latitude - from.latitude)
+  const deltaLon = toRadians(to.longitude - from.longitude)
+  const fromLat = toRadians(from.latitude)
+  const toLat = toRadians(to.latitude)
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(fromLat) * Math.cos(toLat) * Math.sin(deltaLon / 2) ** 2
+  return earthRadiusMiles * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
 // ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
@@ -191,21 +208,9 @@ function toHappening(
 export class ExchangeEngineClient {
   private currentMemberId: string = ''
 
-  /**
-   * Initialise the client by loading the first member in the database.
-   * In the prototype the "current user" is always the seed protagonist.
-   */
-  async initialize(): Promise<void> {
-    const [first] = await db
-      .select()
-      .from(members)
-      .orderBy(asc(members.joinedAt))
-      .limit(1)
-
-    if (!first) {
-      throw new Error('No members found — has the database been seeded?')
-    }
-    this.currentMemberId = first.id
+  /** Initialise the client for the signed-in member. */
+  async initialize(memberId?: string): Promise<void> {
+    this.currentMemberId = memberId ?? await requireCurrentMemberId()
   }
 
   // ---- Members ------------------------------------------------------------
@@ -290,6 +295,165 @@ export class ExchangeEngineClient {
     const memberMap = new Map(memberRows.map((m) => [m.id, toMember(m)]))
 
     return rows.map((r) => toListing(r, memberMap.get(r.memberId)))
+  }
+
+  async getMarketplaceListings(
+    filters: MarketplaceListingFilters = {},
+  ): Promise<Listing[]> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const [currentMemberRow] = await db
+      .select()
+      .from(members)
+      .where(eq(members.id, this.currentMemberId))
+      .limit(1)
+    const currentMember = currentMemberRow ? toMember(currentMemberRow) : null
+
+    const conditions = [eq(listings.isActive, true)]
+    const distanceScope = filters.distance ?? 'community'
+
+    if (filters.category) {
+      conditions.push(eq(listings.category, filters.category))
+    }
+    if (filters.type) {
+      conditions.push(eq(listings.type, filters.type))
+    }
+    if (filters.availabilityType) {
+      conditions.push(eq(listings.availabilityType, filters.availabilityType))
+    }
+    if (filters.minCredits !== undefined) {
+      conditions.push(gte(listings.creditPrice, filters.minCredits))
+    }
+    if (filters.maxCredits !== undefined) {
+      conditions.push(lte(listings.creditPrice, filters.maxCredits))
+    }
+    if (filters.excludeCurrentMember) {
+      conditions.push(ne(listings.memberId, this.currentMemberId))
+    }
+    if (filters.query) {
+      conditions.push(
+        or(
+          ilike(listings.title, `%${filters.query}%`),
+          ilike(listings.description, `%${filters.query}%`),
+        )!,
+      )
+    }
+    if (distanceScope === 'community' && currentMember?.communityId) {
+      conditions.push(eq(members.communityId, currentMember.communityId))
+    }
+
+    const rows = await db
+      .select({ listing: listings, member: members })
+      .from(listings)
+      .innerJoin(members, eq(listings.memberId, members.id))
+      .where(and(...conditions))
+
+    let trustedMemberIds: Set<string> | null = null
+    if (filters.trustedOnly) {
+      const trustedRows = await db
+        .select({ memberId: reputationTags.revieweeId })
+        .from(reputationTags)
+      trustedMemberIds = new Set(trustedRows.map((r) => r.memberId))
+    }
+
+    let results = rows.map(({ listing, member }) =>
+      toListing(listing, toMember(member)),
+    )
+
+    if (trustedMemberIds) {
+      results = results.filter(
+        (listing) =>
+          listing.member && trustedMemberIds?.has(listing.member.id),
+      )
+    }
+
+    if (distanceScope === 'nearby' && currentMember) {
+      const radius = filters.radius ?? 5
+      results = results.filter(
+        (listing) =>
+          listing.member && getDistanceMiles(currentMember, listing.member) <= radius,
+      )
+    }
+
+    results.sort((a, b) => {
+      if (filters.sort === 'credits_low') return a.creditPrice - b.creditPrice
+      if (filters.sort === 'credits_high') return b.creditPrice - a.creditPrice
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
+
+    return filters.limit ? results.slice(0, filters.limit) : results
+  }
+
+  async getSuggestedMatchesForListing(
+    listingId: string,
+    limit = 8,
+  ): Promise<SuggestedListingMatch[]> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const source = await this.getListing(listingId)
+    const matchType = source.type === 'need' ? 'offering' : 'need'
+    const exactCategory = await this.getMarketplaceListings({
+      type: matchType,
+      category: source.category,
+      distance: 'community',
+      excludeCurrentMember: true,
+      limit: limit * 2,
+    })
+
+    const fallback =
+      exactCategory.length >= limit
+        ? []
+        : await this.getMarketplaceListings({
+            type: matchType,
+            distance: 'community',
+            excludeCurrentMember: true,
+            limit: limit * 2,
+          })
+
+    const seen = new Set<string>()
+    const candidates = [...exactCategory, ...fallback].filter((candidate) => {
+      if (candidate.id === source.id || seen.has(candidate.id)) return false
+      seen.add(candidate.id)
+      return true
+    })
+
+    return candidates
+      .map((candidate) => {
+        const reasons: string[] = []
+        let score = 0
+
+        if (candidate.category === source.category) {
+          score += 40
+          reasons.push('Same category')
+        }
+        if (
+          source.member?.communityId &&
+          candidate.member?.communityId === source.member.communityId
+        ) {
+          score += 25
+          reasons.push('Same community')
+        }
+        if (
+          source.creditPrice === 0 ||
+          candidate.creditPrice === 0 ||
+          Math.abs(candidate.creditPrice - source.creditPrice) <= 2
+        ) {
+          score += 20
+          reasons.push('Compatible credits')
+        }
+        if (candidate.member?.isAvailable) {
+          score += 10
+          reasons.push('Member available')
+        }
+        if (candidate.availabilityType === source.availabilityType) {
+          score += 5
+          reasons.push('Similar timing')
+        }
+
+        return { listing: candidate, score, reasons }
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
   }
 
   async getListing(id: string): Promise<Listing> {

@@ -15,25 +15,7 @@ import {
   createListingAction,
   updateListingAction,
 } from '@/app/(app)/profile/listing/actions'
-
-const CATEGORIES: { value: ListingCategory; label: string }[] = [
-  { value: 'food', label: 'Food' },
-  { value: 'services', label: 'Services' },
-  { value: 'skills', label: 'Skills' },
-  { value: 'classes', label: 'Classes' },
-  { value: 'handmade', label: 'Handmade' },
-  { value: 'wellness', label: 'Wellness' },
-  { value: 'tech', label: 'Tech' },
-  { value: 'home', label: 'Home' },
-  { value: 'kids', label: 'Kids' },
-  { value: 'other', label: 'Other' },
-]
-
-const AVAILABILITY_OPTIONS: { value: AvailabilityType; label: string; hint: string }[] = [
-  { value: 'ongoing', label: 'Ongoing', hint: 'Available regularly' },
-  { value: 'one_time', label: 'One-time', hint: 'Single occurrence' },
-  { value: 'event_only', label: 'Event only', hint: 'Tied to an event' },
-]
+import { AVAILABILITY_OPTIONS, LISTING_CATEGORIES } from '@/lib/marketplace'
 
 export interface ListingFormProps {
   mode: 'create' | 'edit'
@@ -90,7 +72,11 @@ export function ListingForm({
         setError(result.error)
         return
       }
-      router.push('/profile')
+      router.push(
+        mode === 'create' && result.id
+          ? `/listing/${result.id}/matches`
+          : '/profile',
+      )
       router.refresh()
     })
   }
@@ -114,7 +100,7 @@ export function ListingForm({
                   : 'bg-surface text-body border-border-light hover:bg-hover',
               )}
             >
-              Offering
+              Offer
             </button>
             <button
               type="button"
@@ -171,7 +157,7 @@ export function ListingForm({
           Category
         </h3>
         <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map(({ value, label }) => (
+          {LISTING_CATEGORIES.map(({ value, label }) => (
             <button
               key={value}
               type="button"
@@ -189,11 +175,11 @@ export function ListingForm({
         </div>
       </Card>
 
-      {/* Price in TU */}
+      {/* Credit amount */}
       <Card>
         <label className="block">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-            Time cost
+            Credit amount
           </span>
           <div className="mt-1.5 flex items-center gap-3">
             <div className="flex items-center gap-2 rounded-lg border border-border-light bg-surface px-3 py-2.5 w-32">
@@ -206,10 +192,12 @@ export function ListingForm({
                 onChange={(e) => setCreditPrice(Math.max(0, Number(e.target.value)))}
                 className="w-full bg-transparent text-sm font-semibold text-body focus:outline-none tabular-nums"
               />
-              <span className="text-xs font-semibold text-muted">TU</span>
+              <span className="text-xs font-semibold text-muted">cr</span>
             </div>
             <span className="text-xs text-muted">
-              ≈ {creditPrice} {creditPrice === 1 ? 'hour' : 'hours'} of community time
+              {creditPrice === 0
+                ? 'Let neighbors suggest a fair amount'
+                : `${creditPrice} ${creditPrice === 1 ? 'credit' : 'credits'}`}
             </span>
           </div>
         </label>
@@ -274,7 +262,7 @@ export function ListingForm({
           disabled={!canSubmit}
           isLoading={isPending}
         >
-          {mode === 'create' ? 'Post' : 'Save'}
+          {mode === 'create' ? 'Post and match' : 'Save'}
         </Button>
       </div>
     </form>

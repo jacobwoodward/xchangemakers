@@ -40,12 +40,12 @@ export function TuBalanceCard({
           <div className="flex items-center gap-2">
             <Clock size={16} className="text-white/70" />
             <span className="text-sm font-medium text-white/70">
-              Time Units
+              Credits
             </span>
           </div>
           {escrowHeld > 0 && (
             <span className="text-xs font-medium text-white/50 tabular-nums">
-              {escrowHeld} TU in escrow
+              {escrowHeld} held
             </span>
           )}
         </div>
@@ -53,10 +53,12 @@ export function TuBalanceCard({
         {/* Big balance */}
         <p className="mt-2 text-4xl font-bold tracking-tight text-white tabular-nums">
           {balance}{' '}
-          <span className="text-lg font-semibold text-white/60">TU</span>
+          <span className="text-lg font-semibold text-white/60">
+            {balance === 1 ? 'credit' : 'credits'}
+          </span>
         </p>
         <p className="mt-1 text-xs text-white/50">
-          1 TU ≈ 1 hour of community time
+          Keep exchanges fair without using cash
         </p>
 
         {/* Monthly progress */}
@@ -70,7 +72,7 @@ export function TuBalanceCard({
             />
           </div>
           <span className="text-xs font-medium text-white/60 tabular-nums whitespace-nowrap">
-            {monthlyEarned} / {MONTHLY_CAP} TU this month
+            {monthlyEarned} / {MONTHLY_CAP} earned this month
           </span>
         </div>
       </div>

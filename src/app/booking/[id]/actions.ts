@@ -13,7 +13,7 @@ export async function createBookingAction(
   try {
     await exchangeEngine.initialize()
 
-    // 1. Create the exchange (places TU in escrow)
+    // 1. Create the exchange (places credits in a held state)
     const exchange = await exchangeEngine.createExchange({
       listingId,
       providerId,

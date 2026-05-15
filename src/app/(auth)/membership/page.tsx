@@ -99,10 +99,11 @@ export default function MembershipPage() {
           {/* ---- Heading ---- */}
           <div className="text-center space-y-1.5">
             <h1 className="text-2xl font-bold text-heading tracking-tight">
-              Choose Your Membership
+              Choose Your Starting Path
             </h1>
             <p className="text-sm text-secondary leading-relaxed">
-              Every membership strengthens your community treasury
+              Real checkout and account activation come next. This prototype
+              lets you preview the member experience.
             </p>
           </div>
 
@@ -114,7 +115,7 @@ export default function MembershipPage() {
               animate={{ opacity: 1, y: 0 }}
             >
               <ShieldCheck size={18} />
-              Welcome to the community!
+              Opening the prototype...
             </motion.div>
           )}
 
@@ -136,7 +137,7 @@ export default function MembershipPage() {
             No ads. No data selling. No pay-to-rank. Ever.
             <br />
             <span className="text-muted/70">
-              No one should be locked out by money.
+              Membership logic should never lock out a useful neighbor.
             </span>
           </p>
         </div>

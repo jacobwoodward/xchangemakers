@@ -15,8 +15,10 @@ import {
   CheckCircle2,
   Circle,
   Sparkles,
+  LogOut,
 } from 'lucide-react'
 import type { OnboardingProgress } from '@/lib/exchange-engine'
+import { signOutAction } from '@/app/(auth)/actions'
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -39,18 +41,20 @@ function TuBalanceMini({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Clock size={16} className="text-white/70" />
-          <span className="text-sm font-medium text-white/70">My Balance</span>
+          <span className="text-sm font-medium text-white/70">My Credits</span>
         </div>
         <span className="text-xs font-medium text-white/50 tabular-nums">
-          {monthlyEarned} TU this month
+          {monthlyEarned} earned this month
         </span>
       </div>
       <p className="mt-1.5 text-3xl font-bold tracking-tight text-white tabular-nums">
         {balance}{' '}
-        <span className="text-base font-semibold text-white/60">TU</span>
+        <span className="text-base font-semibold text-white/60">
+          {balance === 1 ? 'credit' : 'credits'}
+        </span>
       </p>
       <p className="mt-0.5 text-xs text-white/50">
-        1 TU ≈ 1 hour of community time
+        Credits help keep exchanges fair without cash
       </p>
     </Card>
   )
@@ -92,9 +96,8 @@ function YourTrail({ steps }: { steps: OnboardingProgress[] }) {
       {/* Carrot — reward framing */}
       {tuRemaining > 0 && (
         <p className="mb-3 text-xs text-secondary leading-relaxed">
-          Earn <span className="font-semibold text-primary">{tuRemaining} more TU</span>{' '}
-          by finishing your trail. That&rsquo;s {tuRemaining}{' '}
-          {tuRemaining === 1 ? 'hour' : 'hours'} of community time you can spend.
+          Earn <span className="font-semibold text-primary">{tuRemaining} more credits</span>{' '}
+          by finishing your trail. Use them to start your first exchanges.
         </p>
       )}
 
@@ -127,7 +130,7 @@ function YourTrail({ steps }: { steps: OnboardingProgress[] }) {
               </span>
               {!step.completed && step.tuEarned > 0 && (
                 <Badge variant="primary" className="ml-auto text-[10px]">
-                  +{step.tuEarned} TU
+                  +{step.tuEarned}
                 </Badge>
               )}
             </div>
@@ -171,7 +174,7 @@ export default async function MyProfilePage() {
           </Link>
         </div>
 
-        {/* ─── TU Balance ─── */}
+        {/* ─── Credit Balance ─── */}
         <TuBalanceMini
           balance={wallet.balance}
           monthlyEarned={wallet.monthlyEarned}
@@ -195,6 +198,13 @@ export default async function MyProfilePage() {
         {availability.length > 0 && (
           <AvailabilityDisplay slots={availability} />
         )}
+
+        <form action={signOutAction}>
+          <Button type="submit" variant="ghost" size="lg" className="w-full">
+            <LogOut size={17} />
+            Sign out
+          </Button>
+        </form>
       </div>
     </PageTransition>
   )

@@ -44,3 +44,10 @@ drizzle/
 
 # docker
 pgdata/
+
+# local postgres fallback
+.postgres-data/
+
+# local browser smoke artifacts
+test-results/
+playwright-report/

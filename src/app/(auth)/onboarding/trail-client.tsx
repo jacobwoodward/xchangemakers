@@ -1,12 +1,8 @@
 'use client'
 
-import { useState, useCallback, useTransition } from 'react'
 import { StepCard, STEP_INFO } from '@/components/onboarding/step-card'
-import { RewardAnimation } from '@/components/onboarding/reward-animation'
-import { completeStepAction } from './actions'
 import type { OnboardingProgress, OnboardingStep } from '@/lib/exchange-engine/types'
 
-// Canonical step order
 const STEP_ORDER: OnboardingStep[] = [
   'profile_photo',
   'intro_vibe',
@@ -17,6 +13,18 @@ const STEP_ORDER: OnboardingStep[] = [
   'first_review',
   'invite_neighbor',
 ]
+
+const STEP_ACTIONS: Partial<
+  Record<OnboardingStep, { href: string; label: string }>
+> = {
+  profile_photo: { href: '/profile/edit', label: 'Edit profile' },
+  intro_vibe: { href: '/profile/edit', label: 'Edit profile' },
+  add_offerings: { href: '/profile/listing/new?type=offering', label: 'Add offer' },
+  post_need: { href: '/profile/listing/new?type=need', label: 'Post need' },
+  rsvp_happening: { href: '/happenings', label: 'Find event' },
+  first_exchange: { href: '/offers', label: 'Find help' },
+  first_review: { href: '/exchanges', label: 'Open exchanges' },
+}
 
 function getStatus(
   step: OnboardingProgress,
@@ -32,14 +40,9 @@ interface OnboardingTrailClientProps {
 }
 
 export function OnboardingTrailClient({ initialSteps }: OnboardingTrailClientProps) {
-  const [steps, setSteps] = useState(initialSteps)
-  const [reward, setReward] = useState<{ amount: number } | null>(null)
-  const [isPending, startTransition] = useTransition()
-
-  // Sort steps into canonical order
   const sortedSteps = STEP_ORDER.map(
     (stepName) =>
-      steps.find((s) => s.step === stepName) ?? {
+      initialSteps.find((s) => s.step === stepName) ?? {
         id: stepName,
         memberId: '',
         step: stepName,
@@ -49,62 +52,23 @@ export function OnboardingTrailClient({ initialSteps }: OnboardingTrailClientPro
       },
   )
 
-  // First incomplete step is the active one
   const activeStep = sortedSteps.find((s) => !s.completed)?.step ?? null
 
-  const handleComplete = useCallback(
-    (step: OnboardingStep) => {
-      const info = STEP_INFO[step]
-
-      // Optimistic update — mark step as completed immediately
-      setSteps((prev) =>
-        prev.map((s) =>
-          s.step === step
-            ? { ...s, completed: true, completedAt: new Date().toISOString() }
-            : s,
-        ),
-      )
-
-      // Show reward animation
-      setReward({ amount: info.tu })
-
-      // Persist to server
-      startTransition(async () => {
-        await completeStepAction(step)
-      })
-    },
-    [],
-  )
-
-  const handleRewardComplete = useCallback(() => {
-    setReward(null)
-  }, [])
-
   return (
-    <>
-      <div className="space-y-3">
-        {sortedSteps.map((step, i) => (
+    <div className="space-y-3">
+      {sortedSteps.map((step, i) => {
+        const action = STEP_ACTIONS[step.step]
+        return (
           <StepCard
             key={step.step}
             step={step}
             status={getStatus(step, activeStep)}
             index={i}
-            onAction={
-              step.step === activeStep
-                ? () => handleComplete(step.step)
-                : undefined
-            }
+            actionHref={step.step === activeStep ? action?.href : undefined}
+            actionLabel={step.step === activeStep ? action?.label : undefined}
           />
-        ))}
-      </div>
-
-      {/* Celebration overlay */}
-      {reward && (
-        <RewardAnimation
-          amount={reward.amount}
-          onComplete={handleRewardComplete}
-        />
-      )}
-    </>
+        )
+      })}
+    </div>
   )
 }

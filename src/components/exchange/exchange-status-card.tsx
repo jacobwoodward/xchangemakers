@@ -22,7 +22,7 @@ function getSteps(status: ExchangeStatus): Step[] {
   return [
     { label: 'Requested', status: currentIndex > 0 ? 'completed' : currentIndex === 0 ? 'active' : 'pending' },
     { label: 'Accepted', status: currentIndex > 1 ? 'completed' : currentIndex === 1 ? 'active' : 'pending' },
-    { label: 'In Escrow', status: currentIndex > 2 ? 'completed' : currentIndex === 2 ? 'active' : 'pending' },
+    { label: 'Credits Held', status: currentIndex > 2 ? 'completed' : currentIndex === 2 ? 'active' : 'pending' },
     { label: 'Completed', status: currentIndex >= 3 ? 'completed' : 'pending' },
   ] satisfies Step[]
 }
@@ -42,7 +42,7 @@ function formatDate(dateStr: string | null): string {
 const STATUS_BADGE: Record<string, { label: string; variant: 'default' | 'primary' | 'accent' | 'outline' }> = {
   requested: { label: 'Requested', variant: 'outline' },
   accepted: { label: 'Accepted', variant: 'accent' },
-  in_escrow: { label: 'In Escrow', variant: 'accent' },
+  in_escrow: { label: 'Scheduled', variant: 'accent' },
   completed: { label: 'Completed', variant: 'primary' },
   cancelled: { label: 'Cancelled', variant: 'default' },
   disputed: { label: 'Disputed', variant: 'default' },
@@ -126,7 +126,7 @@ export function ExchangeStatusCard({
           </div>
         )}
 
-        {/* TU Amount */}
+        {/* Credit amount */}
         <div className="flex items-center gap-2">
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10">
             <Clock size={14} className="text-primary" />
@@ -134,7 +134,7 @@ export function ExchangeStatusCard({
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted">Amount</p>
             <p className="text-sm font-bold text-primary tabular-nums">
-              {exchange.tuAmount} TU
+              {exchange.tuAmount} {exchange.tuAmount === 1 ? 'credit' : 'credits'}
             </p>
           </div>
           {(exchange.status === 'in_escrow' || exchange.status === 'requested' || exchange.status === 'accepted') && (

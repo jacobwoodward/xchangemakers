@@ -45,17 +45,19 @@ export default async function ListingDetailPage({
       <PageHeader title={listing.title} />
       <PageTransition>
         <div className="pt-16 pb-28 px-4 space-y-5">
-          {/* ─── Price hero ─── */}
+          {/* ─── Credit hero ─── */}
           <div className="flex flex-col items-center justify-center py-4">
             <div className="flex items-center gap-2">
               <Clock size={20} className="text-primary" />
               <span className="text-4xl font-bold tracking-tight text-primary tabular-nums">
                 {listing.creditPrice}
               </span>
-              <span className="text-lg font-semibold text-primary/60">TU</span>
+              <span className="text-lg font-semibold text-primary/60">
+                {listing.creditPrice === 1 ? 'credit' : 'credits'}
+              </span>
             </div>
             <p className="mt-1 text-xs text-muted">
-              ≈ {listing.creditPrice} {listing.creditPrice === 1 ? 'hour' : 'hours'} of community time
+              Credits keep the exchange fair without using cash
             </p>
           </div>
 
@@ -124,12 +126,18 @@ export default async function ListingDetailPage({
           style={{ maxWidth: 'var(--xm-content-max-width)' }}
         >
           <Link
-            href={`/booking/${listing.id}`}
+            href={
+              listing.type === 'offering'
+                ? `/booking/${listing.id}`
+                : listing.member
+                  ? `/member/${listing.member.id}`
+                  : '/messages'
+            }
             className="block"
           >
             <Button variant="primary" size="lg" className="w-full">
               <CalendarCheck size={18} />
-              Book This
+              {listing.type === 'offering' ? 'Request This Offer' : 'Respond to This Need'}
             </Button>
           </Link>
         </div>

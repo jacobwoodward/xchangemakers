@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Camera } from 'lucide-react'
 import { Button, Avatar, Card } from '@/components/ui'
+import { updateProfileAction } from './actions'
 
 interface EditProfileFormProps {
   firstName: string
@@ -26,10 +27,26 @@ export function EditProfileForm({
   const [vibe, setVibe] = useState(initialVibe)
   const [bio, setBio] = useState(initialBio)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true)
-    setTimeout(() => router.back(), 800)
+    setError(null)
+
+    const result = await updateProfileAction({
+      firstName,
+      lastName,
+      vibe,
+      bio,
+    })
+
+    setSaving(false)
+    if (result.error) {
+      setError(result.error)
+      return
+    }
+    router.push('/profile')
+    router.refresh()
   }
 
   return (
@@ -142,6 +159,12 @@ export function EditProfileForm({
             />
           </div>
         </Card>
+
+        {error && (
+          <div className="rounded-lg border border-error/15 bg-error/8 px-3 py-2.5">
+            <p className="text-xs font-medium text-error">{error}</p>
+          </div>
+        )}
 
         <Button
           variant="primary"

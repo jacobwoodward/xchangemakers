@@ -15,7 +15,8 @@ export default async function OnboardingPage() {
       <div className="pt-2 pb-1">
         <h1 className="text-xl font-bold text-heading">Your Trail</h1>
         <p className="text-sm text-secondary mt-0.5">
-          Complete each step to earn Time Units — 1 TU ≈ 1 hour of community time
+          Complete real setup steps to earn starter credits and create your
+          first useful matches.
         </p>
       </div>
 
