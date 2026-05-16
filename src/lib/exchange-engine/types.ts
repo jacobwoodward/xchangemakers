@@ -140,6 +140,7 @@ export interface WalletTransaction {
   amount: number
   description: string
   exchangeId: string | null
+  operationKey?: string | null
   createdAt: string
 }
 
@@ -195,6 +196,31 @@ export interface Booking {
   endTime: string
   status: BookingStatus
   createdAt: string
+}
+
+export type ExchangeRole = 'provider' | 'requester'
+
+/** The single source of truth for an exchange room. */
+export interface ExchangeRoom {
+  exchange: Exchange
+  currentMember: Member
+  counterparty: Member
+  currentRole: ExchangeRole
+  booking: Booking | null
+  conversation: Conversation
+  messages: Message[]
+  reviews: Review[]
+  currentMemberReview: Review | null
+  counterpartyReview: Review | null
+  ledger: WalletTransaction[]
+  can: {
+    accept: boolean
+    schedule: boolean
+    complete: boolean
+    cancel: boolean
+    dispute: boolean
+    review: boolean
+  }
 }
 
 /** A recurring or one-time time slot when a member is available. */
@@ -299,6 +325,7 @@ export interface MembershipTierInfo {
 /** A conversation thread between two or more members. */
 export interface Conversation {
   id: string
+  exchangeId: string | null
   participants: ConversationParticipant[]
   lastMessage?: Message
   updatedAt: string
@@ -376,11 +403,18 @@ export interface CreateExchangeInput {
   providerId: string
   tuAmount: number
   scheduledAt?: string
+  idempotencyKey?: string
 }
 
 export interface CreateBookingInput {
   exchangeId: string
   providerId: string
+  date: string
+  startTime: string
+  endTime: string
+}
+
+export interface ScheduleExchangeInput {
   date: string
   startTime: string
   endTime: string

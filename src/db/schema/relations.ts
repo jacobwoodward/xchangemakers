@@ -14,7 +14,7 @@ import { bookings, availabilitySlots } from './bookings'
 import { reviews, reputationTags } from './reviews'
 import { happenings, happeningRsvps } from './happenings'
 import { onboardingProgress } from './onboarding'
-import { conversationParticipants, messages } from './messages'
+import { conversations, conversationParticipants, messages } from './messages'
 
 // ── Members ────────────────────────────────────────────────────────────
 export const membersRelations = relations(members, ({ one, many }) => ({
@@ -109,6 +109,10 @@ export const exchangesRelations = relations(exchanges, ({ one, many }) => ({
   review: one(reviews, {
     fields: [exchanges.id],
     references: [reviews.exchangeId],
+  }),
+  conversation: one(conversations, {
+    fields: [exchanges.id],
+    references: [conversations.exchangeId],
   }),
   walletTransactions: many(walletTransactions),
 }))

@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, varchar, integer, boolean, timestamp } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, uuid, varchar, integer, boolean, timestamp, unique } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { members } from './members'
 import { exchanges } from './exchanges'
@@ -19,7 +19,9 @@ export const bookings = pgTable('bookings', {
   endTime: varchar('end_time', { length: 5 }).notNull(), // "10:00"
   status: bookingStatusEnum('status').default('pending').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+}, (table) => [
+  unique('bookings_exchange_unique').on(table.exchangeId),
+])
 
 export const bookingsRelations = relations(bookings, ({ one }) => ({
   exchange: one(exchanges, {

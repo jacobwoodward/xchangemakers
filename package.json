@@ -12,6 +12,7 @@
     "smoke:auth": "node scripts/auth-smoke.mjs",
     "smoke:auth:browser": "playwright test scripts/auth-browser-smoke.spec.ts --reporter=line",
     "smoke:marketplace": "playwright test scripts/marketplace-browser-smoke.spec.ts --reporter=line",
+    "smoke:exchange": "playwright test scripts/exchange-room-browser-smoke.spec.ts --reporter=line",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio",

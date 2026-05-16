@@ -1,14 +1,20 @@
-import { pgTable, uuid, text, timestamp } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, unique } from 'drizzle-orm/pg-core'
 import { relations } from 'drizzle-orm'
 import { members } from './members'
+import { exchanges } from './exchanges'
 
 export const conversations = pgTable('conversations', {
   id: uuid('id').primaryKey().defaultRandom(),
+  exchangeId: uuid('exchange_id').unique().references(() => exchanges.id),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
-export const conversationsRelations = relations(conversations, ({ many }) => ({
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  exchange: one(exchanges, {
+    fields: [conversations.exchangeId],
+    references: [exchanges.id],
+  }),
   participants: many(conversationParticipants),
   messages: many(messages),
 }))
@@ -19,7 +25,9 @@ export const conversationParticipants = pgTable('conversation_participants', {
   memberId: uuid('member_id').notNull().references(() => members.id),
   lastReadAt: timestamp('last_read_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-})
+}, (table) => [
+  unique('conversation_participants_member_unique').on(table.conversationId, table.memberId),
+])
 
 export const conversationParticipantsRelations = relations(conversationParticipants, ({ one }) => ({
   conversation: one(conversations, {

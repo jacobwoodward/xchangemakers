@@ -145,6 +145,7 @@ async function migrate() {
   await seedCommunities();
   await ensureAuthTables();
   await ensureListingLifecycleColumns();
+  await ensurePhase4ExchangeRoomColumns();
 }
 
 async function ensureCommunityTables() {
@@ -266,6 +267,61 @@ async function ensureListingLifecycleColumns() {
   `);
 }
 
+async function ensurePhase4ExchangeRoomColumns() {
+  const exchangesTable = await sql`
+    SELECT count(*)::int as c FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'exchanges'
+  `;
+
+  if (exchangesTable[0].c === 0) return;
+
+  await sql.unsafe(`
+    ALTER TABLE exchanges
+      ADD COLUMN IF NOT EXISTS idempotency_key varchar(160);
+
+    DROP INDEX IF EXISTS exchanges_idempotency_key_unique;
+    CREATE UNIQUE INDEX IF NOT EXISTS exchanges_idempotency_key_unique
+      ON exchanges(idempotency_key);
+
+    ALTER TABLE wallet_transactions
+      ADD COLUMN IF NOT EXISTS operation_key varchar(160);
+
+    DROP INDEX IF EXISTS wallet_transactions_operation_key_unique;
+    CREATE UNIQUE INDEX IF NOT EXISTS wallet_transactions_operation_key_unique
+      ON wallet_transactions(operation_key);
+
+    ALTER TABLE conversations
+      ADD COLUMN IF NOT EXISTS exchange_id uuid REFERENCES exchanges(id);
+
+    DROP INDEX IF EXISTS conversations_exchange_id_unique;
+    CREATE UNIQUE INDEX IF NOT EXISTS conversations_exchange_id_unique
+      ON conversations(exchange_id);
+
+    DELETE FROM conversation_participants a
+    USING conversation_participants b
+    WHERE a.id > b.id
+      AND a.conversation_id = b.conversation_id
+      AND a.member_id = b.member_id;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS conversation_participants_member_unique
+      ON conversation_participants(conversation_id, member_id);
+
+    DELETE FROM bookings b
+    USING (
+      SELECT id, row_number() OVER (
+        PARTITION BY exchange_id
+        ORDER BY created_at DESC, id DESC
+      ) AS rn
+      FROM bookings
+    ) ranked
+    WHERE b.id = ranked.id
+      AND ranked.rn > 1;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS bookings_exchange_unique
+      ON bookings(exchange_id);
+  `);
+}
+
 async function createSchema() {
   // Create enums
   await sql.unsafe(`
@@ -378,6 +434,7 @@ async function createSchema() {
       amount integer NOT NULL,
       description varchar(500),
       exchange_id uuid,
+      operation_key varchar(160) UNIQUE,
       created_at timestamptz NOT NULL DEFAULT now()
     );
 
@@ -403,6 +460,7 @@ async function createSchema() {
       listing_id uuid NOT NULL REFERENCES listings(id),
       provider_id uuid NOT NULL REFERENCES members(id),
       requester_id uuid NOT NULL REFERENCES members(id),
+      idempotency_key varchar(160) UNIQUE,
       status exchange_status NOT NULL DEFAULT 'requested',
       tu_amount integer NOT NULL,
       scheduled_at timestamptz,
@@ -413,7 +471,7 @@ async function createSchema() {
 
     CREATE TABLE IF NOT EXISTS bookings (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      exchange_id uuid NOT NULL REFERENCES exchanges(id),
+      exchange_id uuid NOT NULL UNIQUE REFERENCES exchanges(id),
       provider_id uuid NOT NULL REFERENCES members(id),
       requester_id uuid NOT NULL REFERENCES members(id),
       date timestamptz NOT NULL,
@@ -496,6 +554,7 @@ async function createSchema() {
 
     CREATE TABLE IF NOT EXISTS conversations (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      exchange_id uuid UNIQUE REFERENCES exchanges(id),
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     );
@@ -505,7 +564,8 @@ async function createSchema() {
       conversation_id uuid NOT NULL REFERENCES conversations(id),
       member_id uuid NOT NULL REFERENCES members(id),
       last_read_at timestamptz,
-      created_at timestamptz NOT NULL DEFAULT now()
+      created_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE(conversation_id, member_id)
     );
 
     CREATE TABLE IF NOT EXISTS messages (

@@ -19,6 +19,7 @@ export async function createBookingAction(
       providerId,
       tuAmount,
       scheduledAt: `${date}T${startTime}:00`,
+      idempotencyKey: `booking:${listingId}:${date}:${startTime}:${endTime}`,
     })
 
     // 2. Create the booking time slot

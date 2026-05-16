@@ -26,7 +26,7 @@ import {
   conversationParticipants,
   messages,
 } from '@/db/schema'
-import { eq, ilike, and, or, desc, sql, asc, gte, lte, ne, gt } from 'drizzle-orm'
+import { eq, ilike, and, or, desc, sql, asc, gte, lte, ne, gt, inArray } from 'drizzle-orm'
 import { requireCurrentMemberId } from '@/lib/auth/session'
 
 import type {
@@ -51,12 +51,14 @@ import type {
   MembershipTierInfo,
   Conversation,
   Message,
+  ExchangeRoom,
   SearchFilters,
   SearchResult,
   MarketplaceListingFilters,
   SuggestedListingMatch,
   CreateExchangeInput,
   CreateBookingInput,
+  ScheduleExchangeInput,
   CreateReviewInput,
   CreateListingInput,
   SendMessageInput,
@@ -121,6 +123,7 @@ function toWalletTransaction(
     amount: row.amount,
     description: row.description,
     exchangeId: row.exchangeId ?? null,
+    operationKey: row.operationKey ?? null,
     createdAt: row.createdAt.toISOString(),
   }
 }
@@ -169,6 +172,35 @@ function toExchange(
     ...(listing ? { listing } : {}),
     ...(provider ? { provider } : {}),
     ...(requester ? { requester } : {}),
+  }
+}
+
+function toBooking(row: typeof bookings.$inferSelect): Booking {
+  return {
+    id: row.id,
+    exchangeId: row.exchangeId,
+    providerId: row.providerId,
+    requesterId: row.requesterId,
+    date: row.date.toISOString(),
+    startTime: row.startTime,
+    endTime: row.endTime,
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+  }
+}
+
+function toReview(
+  row: typeof reviews.$inferSelect,
+  tags: ReputationTagType[] = [],
+): Review {
+  return {
+    id: row.id,
+    exchangeId: row.exchangeId,
+    reviewerId: row.reviewerId,
+    revieweeId: row.revieweeId,
+    note: row.note ?? null,
+    tags,
+    createdAt: row.createdAt.toISOString(),
   }
 }
 
@@ -717,31 +749,197 @@ export class ExchangeEngineClient {
     )
   }
 
+  async getExchangeRoom(id: string): Promise<ExchangeRoom> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const [exchangeRow] = await db
+      .select()
+      .from(exchanges)
+      .where(eq(exchanges.id, id))
+      .limit(1)
+
+    if (!exchangeRow) throw new Error(`Exchange ${id} not found`)
+    this.assertExchangeParticipant(exchangeRow)
+
+    const conversation = await this.getOrCreateExchangeConversation(exchangeRow)
+
+    const [listingRows, memberRows, bookingRows, messageRows, ledgerRows, reviewRows] =
+      await Promise.all([
+        db
+          .select()
+          .from(listings)
+          .where(eq(listings.id, exchangeRow.listingId))
+          .limit(1),
+        db
+          .select()
+          .from(members)
+          .where(
+            inArray(members.id, [
+              exchangeRow.providerId,
+              exchangeRow.requesterId,
+            ]),
+          ),
+        db
+          .select()
+          .from(bookings)
+          .where(eq(bookings.exchangeId, exchangeRow.id))
+          .orderBy(desc(bookings.createdAt))
+          .limit(1),
+        db
+          .select()
+          .from(messages)
+          .where(eq(messages.conversationId, conversation.id))
+          .orderBy(asc(messages.createdAt)),
+        db
+          .select()
+          .from(walletTransactions)
+          .where(eq(walletTransactions.exchangeId, exchangeRow.id))
+          .orderBy(asc(walletTransactions.createdAt)),
+        db
+          .select()
+          .from(reviews)
+          .where(eq(reviews.exchangeId, exchangeRow.id))
+          .orderBy(asc(reviews.createdAt)),
+      ])
+
+    const listingRow = listingRows[0]
+    if (!listingRow) throw new Error(`Listing ${exchangeRow.listingId} not found`)
+
+    const memberMap = new Map(memberRows.map((row) => [row.id, toMember(row)]))
+    const provider = memberMap.get(exchangeRow.providerId)
+    const requester = memberMap.get(exchangeRow.requesterId)
+    const currentMember = memberMap.get(this.currentMemberId)
+    if (!provider || !requester || !currentMember) {
+      throw new Error('Exchange members could not be loaded')
+    }
+
+    const reviewIds = reviewRows.map((row) => row.id)
+    const tagRows =
+      reviewIds.length > 0
+        ? await db
+            .select()
+            .from(reputationTags)
+            .where(inArray(reputationTags.reviewId, reviewIds))
+        : []
+    const tagsByReviewId = new Map<string, ReputationTagType[]>()
+    for (const row of tagRows) {
+      const existing = tagsByReviewId.get(row.reviewId) ?? []
+      existing.push(row.tag)
+      tagsByReviewId.set(row.reviewId, existing)
+    }
+
+    const roomReviews = reviewRows.map((row) =>
+      toReview(row, tagsByReviewId.get(row.id) ?? []),
+    )
+    const currentMemberReview =
+      roomReviews.find((review) => review.reviewerId === this.currentMemberId) ??
+      null
+    const counterpartyReview =
+      roomReviews.find((review) => review.reviewerId !== this.currentMemberId) ??
+      null
+    const currentRole =
+      this.currentMemberId === exchangeRow.providerId ? 'provider' : 'requester'
+    const counterparty = currentRole === 'provider' ? requester : provider
+    const exchange = toExchange(
+      exchangeRow,
+      toListing(listingRow, memberMap.get(listingRow.memberId)),
+      provider,
+      requester,
+    )
+    const status = exchangeRow.status
+
+    return {
+      exchange,
+      currentMember,
+      counterparty,
+      currentRole,
+      booking: bookingRows[0] ? toBooking(bookingRows[0]) : null,
+      conversation,
+      messages: messageRows.map((row) => ({
+        id: row.id,
+        conversationId: row.conversationId,
+        senderId: row.senderId,
+        content: row.content,
+        createdAt: row.createdAt.toISOString(),
+      })),
+      reviews: roomReviews,
+      currentMemberReview,
+      counterpartyReview,
+      ledger: ledgerRows.map(toWalletTransaction),
+      can: {
+        accept: currentRole === 'provider' && status === 'requested',
+        schedule: ['requested', 'accepted', 'in_escrow'].includes(status),
+        complete: ['accepted', 'in_escrow'].includes(status),
+        cancel: ['requested', 'accepted', 'in_escrow'].includes(status),
+        dispute: ['accepted', 'in_escrow'].includes(status),
+        review: status === 'completed' && currentMemberReview === null,
+      },
+    }
+  }
+
   /**
    * Create a new exchange request. Places the TU amount in escrow by
-   * debiting the requester's wallet and recording an escrow_hold transaction.
+   * debiting the requester's wallet and recording an idempotent hold.
    */
   async createExchange(input: CreateExchangeInput): Promise<Exchange> {
     if (!this.currentMemberId) await this.initialize()
 
-    // When a scheduledAt is provided (booking flow), go straight to in_escrow
-    const initialStatus = input.scheduledAt ? 'in_escrow' : 'requested'
+    const listing = await this.getListing(input.listingId)
+    if (listing.memberId !== input.providerId) {
+      throw new Error('Exchange provider does not own this listing')
+    }
+    if (listing.memberId === this.currentMemberId) {
+      throw new Error('You cannot request your own listing')
+    }
+
+    const scopedIdempotencyKey = input.idempotencyKey
+      ? `${this.currentMemberId}:${input.idempotencyKey}`.slice(0, 160)
+      : null
+
+    if (scopedIdempotencyKey) {
+      const [existing] = await db
+        .select()
+        .from(exchanges)
+        .where(eq(exchanges.idempotencyKey, scopedIdempotencyKey))
+        .limit(1)
+
+      if (existing) return toExchange(existing, listing)
+    }
+
+    const initialStatus: Exchange['status'] = input.scheduledAt
+      ? 'in_escrow'
+      : 'requested'
 
     return await db.transaction(async (tx) => {
-      // Create the exchange row
-      const [exchangeRow] = await tx
-        .insert(exchanges)
-        .values({
-          listingId: input.listingId,
-          providerId: input.providerId,
-          requesterId: this.currentMemberId,
-          status: initialStatus,
-          tuAmount: input.tuAmount,
-          scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
-        })
-        .returning()
+      const values = {
+        listingId: input.listingId,
+        providerId: input.providerId,
+        requesterId: this.currentMemberId,
+        idempotencyKey: scopedIdempotencyKey,
+        status: initialStatus,
+        tuAmount: input.tuAmount,
+        scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
+      }
 
-      // Escrow: debit requester wallet, record transaction
+      const insertedRows = scopedIdempotencyKey
+        ? await tx
+            .insert(exchanges)
+            .values(values)
+            .onConflictDoNothing({ target: exchanges.idempotencyKey })
+            .returning()
+        : await tx.insert(exchanges).values(values).returning()
+
+      let exchangeRow = insertedRows[0]
+      if (!exchangeRow && scopedIdempotencyKey) {
+        const [existing] = await tx
+          .select()
+          .from(exchanges)
+          .where(eq(exchanges.idempotencyKey, scopedIdempotencyKey))
+          .limit(1)
+        if (!existing) throw new Error('Unable to create exchange request')
+        exchangeRow = existing
+      }
+
       const [wallet] = await tx
         .select()
         .from(wallets)
@@ -749,31 +947,42 @@ export class ExchangeEngineClient {
 
       if (!wallet) throw new Error(`Wallet not found for member ${this.currentMemberId}`)
 
-      await tx
-        .update(wallets)
-        .set({
-          balance: sql`${wallets.balance} - ${input.tuAmount}`,
-          escrowHeld: sql`${wallets.escrowHeld} + ${input.tuAmount}`,
-        })
-        .where(eq(wallets.id, wallet.id))
-
-      await tx.insert(walletTransactions).values({
+      await this.applyLedgerOperation(tx, {
         walletId: wallet.id,
         type: 'escrow_hold',
-        amount: input.tuAmount,
-        description: `Escrow hold for exchange`,
+        amount: exchangeRow.tuAmount,
+        description: 'Credits held for exchange',
         exchangeId: exchangeRow.id,
+        operationKey: this.ledgerOperationKey(exchangeRow.id, wallet.id, 'hold'),
       })
 
-      return toExchange(exchangeRow)
+      return toExchange(exchangeRow, listing)
     })
   }
 
   async acceptExchange(id: string): Promise<Exchange> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const [exchangeRow] = await db
+      .select()
+      .from(exchanges)
+      .where(eq(exchanges.id, id))
+      .limit(1)
+
+    if (!exchangeRow) throw new Error(`Exchange ${id} not found`)
+    this.assertExchangeProvider(exchangeRow)
+
+    if (exchangeRow.status === 'accepted' || exchangeRow.status === 'in_escrow') {
+      return toExchange(exchangeRow)
+    }
+    if (exchangeRow.status !== 'requested') {
+      throw new Error(`Cannot accept an exchange with status '${exchangeRow.status}'`)
+    }
+
     const [row] = await db
       .update(exchanges)
-      .set({ status: 'accepted' })
-      .where(eq(exchanges.id, id))
+      .set({ status: 'accepted', updatedAt: new Date() })
+      .where(and(eq(exchanges.id, id), eq(exchanges.status, 'requested')))
       .returning()
 
     if (!row) throw new Error(`Exchange ${id} not found`)
@@ -785,32 +994,40 @@ export class ExchangeEngineClient {
    * and marks the exchange as completed.
    */
   async completeExchange(id: string): Promise<Exchange> {
+    if (!this.currentMemberId) await this.initialize()
+
     const [exchangeRow] = await db
       .select()
       .from(exchanges)
       .where(eq(exchanges.id, id))
 
     if (!exchangeRow) throw new Error(`Exchange ${id} not found`)
+    this.assertExchangeParticipant(exchangeRow)
 
-    // Idempotent: if already completed, return as-is
     if (exchangeRow.status === 'completed') return toExchange(exchangeRow)
 
-    // Only allow completion from valid pre-completion states
-    if (exchangeRow.status === 'cancelled' || exchangeRow.status === 'disputed') {
-      throw new Error(
-        `Cannot complete exchange ${id} — current status is '${exchangeRow.status}'`,
-      )
-    }
-
     return await db.transaction(async (tx) => {
-      // Update exchange status
       const [updated] = await tx
         .update(exchanges)
-        .set({ status: 'completed', completedAt: new Date() })
-        .where(eq(exchanges.id, id))
+        .set({ status: 'completed', completedAt: new Date(), updatedAt: new Date() })
+        .where(
+          and(
+            eq(exchanges.id, id),
+            inArray(exchanges.status, ['accepted', 'in_escrow']),
+          ),
+        )
         .returning()
 
-      // Release escrow: credit provider, clear requester escrow
+      if (!updated) {
+        const [current] = await tx
+          .select()
+          .from(exchanges)
+          .where(eq(exchanges.id, id))
+          .limit(1)
+        if (current?.status === 'completed') return toExchange(current)
+        throw new Error(`Cannot complete an exchange with status '${current?.status}'`)
+      }
+
       const [providerWallet] = await tx
         .select()
         .from(wallets)
@@ -823,43 +1040,132 @@ export class ExchangeEngineClient {
       if (!providerWallet) throw new Error(`Wallet not found for provider ${exchangeRow.providerId}`)
       if (!requesterWallet) throw new Error(`Wallet not found for requester ${exchangeRow.requesterId}`)
 
-      await Promise.all([
-        // Credit provider
-        tx
-          .update(wallets)
-          .set({
-            balance: sql`${wallets.balance} + ${exchangeRow.tuAmount}`,
-            totalEarned: sql`${wallets.totalEarned} + ${exchangeRow.tuAmount}`,
-            monthlyEarned: sql`${wallets.monthlyEarned} + ${exchangeRow.tuAmount}`,
-          })
-          .where(eq(wallets.id, providerWallet.id)),
-        // Clear requester escrow
-        tx
-          .update(wallets)
-          .set({
-            escrowHeld: sql`${wallets.escrowHeld} - ${exchangeRow.tuAmount}`,
-          })
-          .where(eq(wallets.id, requesterWallet.id)),
-        // Provider transaction
-        tx.insert(walletTransactions).values({
-          walletId: providerWallet.id,
-          type: 'escrow_release',
-          amount: exchangeRow.tuAmount,
-          description: `Payment received for exchange`,
-          exchangeId: id,
-        }),
-        // Requester transaction
-        tx.insert(walletTransactions).values({
-          walletId: requesterWallet.id,
-          type: 'spent',
-          amount: exchangeRow.tuAmount,
-          description: `Payment for completed exchange`,
-          exchangeId: id,
-        }),
-      ])
+      await this.applyLedgerOperation(tx, {
+        walletId: providerWallet.id,
+        type: 'escrow_release',
+        amount: exchangeRow.tuAmount,
+        description: 'Credits received for completed exchange',
+        exchangeId: id,
+        operationKey: this.ledgerOperationKey(id, providerWallet.id, 'release'),
+      })
+      await this.applyLedgerOperation(tx, {
+        walletId: requesterWallet.id,
+        type: 'spent',
+        amount: exchangeRow.tuAmount,
+        description: 'Held credits spent on completed exchange',
+        exchangeId: id,
+        operationKey: this.ledgerOperationKey(id, requesterWallet.id, 'spent'),
+      })
 
       return toExchange(updated)
     })
+  }
+
+  async cancelExchange(id: string): Promise<Exchange> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const [exchangeRow] = await db
+      .select()
+      .from(exchanges)
+      .where(eq(exchanges.id, id))
+      .limit(1)
+
+    if (!exchangeRow) throw new Error(`Exchange ${id} not found`)
+    this.assertExchangeParticipant(exchangeRow)
+
+    if (exchangeRow.status === 'cancelled') return toExchange(exchangeRow)
+    if (exchangeRow.status === 'completed' || exchangeRow.status === 'disputed') {
+      throw new Error(`Cannot cancel an exchange with status '${exchangeRow.status}'`)
+    }
+
+    return await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(exchanges)
+        .set({ status: 'cancelled', updatedAt: new Date() })
+        .where(
+          and(
+            eq(exchanges.id, id),
+            inArray(exchanges.status, ['requested', 'accepted', 'in_escrow']),
+          ),
+        )
+        .returning()
+
+      if (!updated) {
+        const [current] = await tx
+          .select()
+          .from(exchanges)
+          .where(eq(exchanges.id, id))
+          .limit(1)
+        if (current?.status === 'cancelled') return toExchange(current)
+        throw new Error(`Cannot cancel an exchange with status '${current?.status}'`)
+      }
+
+      const [requesterWallet] = await tx
+        .select()
+        .from(wallets)
+        .where(eq(wallets.memberId, exchangeRow.requesterId))
+        .limit(1)
+
+      if (!requesterWallet) {
+        throw new Error(`Wallet not found for requester ${exchangeRow.requesterId}`)
+      }
+
+      const [hold] = await tx
+        .select()
+        .from(walletTransactions)
+        .where(
+          and(
+            eq(walletTransactions.exchangeId, id),
+            eq(walletTransactions.walletId, requesterWallet.id),
+            eq(walletTransactions.type, 'escrow_hold'),
+          ),
+        )
+        .limit(1)
+
+      if (hold) {
+        await this.applyLedgerOperation(tx, {
+          walletId: requesterWallet.id,
+          type: 'escrow_return',
+          amount: exchangeRow.tuAmount,
+          description: 'Held credits returned after cancellation',
+          exchangeId: id,
+          operationKey: this.ledgerOperationKey(id, requesterWallet.id, 'return'),
+        })
+      }
+
+      return toExchange(updated)
+    })
+  }
+
+  async disputeExchange(id: string): Promise<Exchange> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const [exchangeRow] = await db
+      .select()
+      .from(exchanges)
+      .where(eq(exchanges.id, id))
+      .limit(1)
+
+    if (!exchangeRow) throw new Error(`Exchange ${id} not found`)
+    this.assertExchangeParticipant(exchangeRow)
+
+    if (exchangeRow.status === 'disputed') return toExchange(exchangeRow)
+    if (!['accepted', 'in_escrow'].includes(exchangeRow.status)) {
+      throw new Error(`Cannot dispute an exchange with status '${exchangeRow.status}'`)
+    }
+
+    const [updated] = await db
+      .update(exchanges)
+      .set({ status: 'disputed', updatedAt: new Date() })
+      .where(
+        and(
+          eq(exchanges.id, id),
+          inArray(exchanges.status, ['accepted', 'in_escrow']),
+        ),
+      )
+      .returning()
+
+    return toExchange(updated ?? exchangeRow)
   }
 
   // ---- Bookings -----------------------------------------------------------
@@ -882,38 +1188,139 @@ export class ExchangeEngineClient {
   }
 
   async createBooking(input: CreateBookingInput): Promise<Booking> {
+    return this.scheduleExchange(input.exchangeId, {
+      date: input.date,
+      startTime: input.startTime,
+      endTime: input.endTime,
+    })
+  }
+
+  async scheduleExchange(
+    exchangeId: string,
+    input: ScheduleExchangeInput,
+  ): Promise<Booking> {
     if (!this.currentMemberId) await this.initialize()
 
-    const [row] = await db
-      .insert(bookings)
-      .values({
-        exchangeId: input.exchangeId,
-        providerId: input.providerId,
-        requesterId: this.currentMemberId,
-        date: new Date(input.date),
-        startTime: input.startTime,
-        endTime: input.endTime,
-        status: 'confirmed',
-      })
-      .returning()
+    const [exchangeRow] = await db
+      .select()
+      .from(exchanges)
+      .where(eq(exchanges.id, exchangeId))
+      .limit(1)
 
-    return {
-      id: row.id,
-      exchangeId: row.exchangeId,
-      providerId: row.providerId,
-      requesterId: row.requesterId,
-      date: row.date.toISOString(),
-      startTime: row.startTime,
-      endTime: row.endTime,
-      status: row.status,
-      createdAt: row.createdAt.toISOString(),
+    if (!exchangeRow) throw new Error(`Exchange ${exchangeId} not found`)
+    this.assertExchangeParticipant(exchangeRow)
+
+    if (['completed', 'cancelled', 'disputed'].includes(exchangeRow.status)) {
+      throw new Error(`Cannot schedule an exchange with status '${exchangeRow.status}'`)
     }
+
+    return await db.transaction(async (tx) => {
+      const scheduledAt = new Date(`${input.date}T${input.startTime}:00`)
+      const bookingDate = new Date(input.date)
+
+      const [updatedExchange] = await tx
+        .update(exchanges)
+        .set({
+          status: 'in_escrow',
+          scheduledAt,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(exchanges.id, exchangeId),
+            inArray(exchanges.status, ['requested', 'accepted', 'in_escrow']),
+          ),
+        )
+        .returning()
+
+      if (!updatedExchange) {
+        throw new Error('Unable to schedule this exchange')
+      }
+
+      const [existingBooking] = await tx
+        .select()
+        .from(bookings)
+        .where(eq(bookings.exchangeId, exchangeId))
+        .limit(1)
+
+      if (existingBooking) {
+        const [row] = await tx
+          .update(bookings)
+          .set({
+            date: bookingDate,
+            startTime: input.startTime,
+            endTime: input.endTime,
+            status: 'confirmed',
+          })
+          .where(eq(bookings.id, existingBooking.id))
+          .returning()
+        return toBooking(row)
+      }
+
+      const [row] = await tx
+        .insert(bookings)
+        .values({
+          exchangeId,
+          providerId: exchangeRow.providerId,
+          requesterId: exchangeRow.requesterId,
+          date: bookingDate,
+          startTime: input.startTime,
+          endTime: input.endTime,
+          status: 'confirmed',
+        })
+        .returning()
+
+      return toBooking(row)
+    })
   }
 
   // ---- Reviews ------------------------------------------------------------
 
   async createReview(input: CreateReviewInput): Promise<Review> {
     if (!this.currentMemberId) await this.initialize()
+
+    if (input.tags.length === 0) {
+      throw new Error('Select at least one review tag')
+    }
+
+    const [exchangeRow] = await db
+      .select()
+      .from(exchanges)
+      .where(eq(exchanges.id, input.exchangeId))
+      .limit(1)
+
+    if (!exchangeRow) throw new Error(`Exchange ${input.exchangeId} not found`)
+    this.assertExchangeParticipant(exchangeRow)
+    if (exchangeRow.status !== 'completed') {
+      throw new Error('Reviews can only be left after completion')
+    }
+
+    const expectedReviewee =
+      this.currentMemberId === exchangeRow.providerId
+        ? exchangeRow.requesterId
+        : exchangeRow.providerId
+    if (input.revieweeId !== expectedReviewee) {
+      throw new Error('Reviewee must be the other exchange member')
+    }
+
+    const [existingReview] = await db
+      .select()
+      .from(reviews)
+      .where(
+        and(
+          eq(reviews.exchangeId, input.exchangeId),
+          eq(reviews.reviewerId, this.currentMemberId),
+        ),
+      )
+      .limit(1)
+
+    if (existingReview) {
+      const tagRows = await db
+        .select()
+        .from(reputationTags)
+        .where(eq(reputationTags.reviewId, existingReview.id))
+      return toReview(existingReview, tagRows.map((row) => row.tag))
+    }
 
     const [reviewRow] = await db
       .insert(reviews)
@@ -923,7 +1330,25 @@ export class ExchangeEngineClient {
         revieweeId: input.revieweeId,
         note: input.note ?? null,
       })
+      .onConflictDoNothing({
+        target: [reviews.exchangeId, reviews.reviewerId],
+      })
       .returning()
+
+    if (!reviewRow) {
+      const [createdByRace] = await db
+        .select()
+        .from(reviews)
+        .where(
+          and(
+            eq(reviews.exchangeId, input.exchangeId),
+            eq(reviews.reviewerId, this.currentMemberId),
+          ),
+        )
+        .limit(1)
+      if (!createdByRace) throw new Error('Unable to create review')
+      return toReview(createdByRace)
+    }
 
     // Insert individual reputation tags
     if (input.tags.length > 0) {
@@ -937,15 +1362,7 @@ export class ExchangeEngineClient {
       )
     }
 
-    return {
-      id: reviewRow.id,
-      exchangeId: reviewRow.exchangeId,
-      reviewerId: reviewRow.reviewerId,
-      revieweeId: reviewRow.revieweeId,
-      note: reviewRow.note ?? null,
-      tags: input.tags,
-      createdAt: reviewRow.createdAt.toISOString(),
-    }
+    return toReview(reviewRow, input.tags)
   }
 
   // ---- Happenings ---------------------------------------------------------
@@ -1189,7 +1606,7 @@ export class ExchangeEngineClient {
       const now = new Date()
       const [conversation] = await tx
         .insert(conversations)
-        .values({ updatedAt: now })
+        .values({ exchangeId: null, updatedAt: now })
         .returning()
 
       await tx.insert(conversationParticipants).values([
@@ -1297,6 +1714,7 @@ export class ExchangeEngineClient {
 
       return {
         id: c.id,
+        exchangeId: c.exchangeId ?? null,
         participants: cParticipants,
         lastMessage: lastMsg
           ? {
@@ -1313,6 +1731,23 @@ export class ExchangeEngineClient {
   }
 
   async getMessages(conversationId: string): Promise<Message[]> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const [participant] = await db
+      .select()
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          eq(conversationParticipants.memberId, this.currentMemberId),
+        ),
+      )
+      .limit(1)
+
+    if (!participant) {
+      throw new Error('Not authorized to read this conversation')
+    }
+
     const rows = await db
       .select()
       .from(messages)
@@ -1423,6 +1858,233 @@ export class ExchangeEngineClient {
 
   // ---- Private helpers ----------------------------------------------------
 
+  private assertExchangeParticipant(row: typeof exchanges.$inferSelect): void {
+    if (
+      row.providerId !== this.currentMemberId &&
+      row.requesterId !== this.currentMemberId
+    ) {
+      throw new Error('Not authorized to view this exchange')
+    }
+  }
+
+  private assertExchangeProvider(row: typeof exchanges.$inferSelect): void {
+    if (row.providerId !== this.currentMemberId) {
+      throw new Error('Only the provider can accept this exchange')
+    }
+  }
+
+  private ledgerOperationKey(
+    exchangeId: string,
+    walletId: string,
+    operation: 'hold' | 'release' | 'spent' | 'return',
+  ): string {
+    return `${exchangeId}:${walletId}:${operation}`
+  }
+
+  private async applyLedgerOperation(
+    tx: any,
+    input: {
+      walletId: string
+      type: 'escrow_hold' | 'escrow_release' | 'spent' | 'escrow_return'
+      amount: number
+      description: string
+      exchangeId: string
+      operationKey: string
+    },
+  ): Promise<boolean> {
+    const [operation] = await tx
+      .insert(walletTransactions)
+      .values({
+        walletId: input.walletId,
+        type: input.type,
+        amount: input.amount,
+        description: input.description,
+        exchangeId: input.exchangeId,
+        operationKey: input.operationKey,
+      })
+      .onConflictDoNothing({ target: walletTransactions.operationKey })
+      .returning()
+
+    if (!operation) return false
+
+    if (input.type === 'escrow_hold') {
+      const [updated] = await tx
+        .update(wallets)
+        .set({
+          balance: sql`${wallets.balance} - ${input.amount}`,
+          escrowHeld: sql`${wallets.escrowHeld} + ${input.amount}`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(wallets.id, input.walletId), gte(wallets.balance, input.amount)))
+        .returning()
+
+      if (!updated) throw new Error('Insufficient credits for this exchange')
+    }
+
+    if (input.type === 'escrow_release') {
+      await tx
+        .update(wallets)
+        .set({
+          balance: sql`${wallets.balance} + ${input.amount}`,
+          totalEarned: sql`${wallets.totalEarned} + ${input.amount}`,
+          monthlyEarned: sql`${wallets.monthlyEarned} + ${input.amount}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(wallets.id, input.walletId))
+    }
+
+    if (input.type === 'spent') {
+      const [updated] = await tx
+        .update(wallets)
+        .set({
+          escrowHeld: sql`${wallets.escrowHeld} - ${input.amount}`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(wallets.id, input.walletId), gte(wallets.escrowHeld, input.amount)))
+        .returning()
+
+      if (!updated) throw new Error('Held credits are not available for release')
+    }
+
+    if (input.type === 'escrow_return') {
+      const [updated] = await tx
+        .update(wallets)
+        .set({
+          balance: sql`${wallets.balance} + ${input.amount}`,
+          escrowHeld: sql`${wallets.escrowHeld} - ${input.amount}`,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(wallets.id, input.walletId), gte(wallets.escrowHeld, input.amount)))
+        .returning()
+
+      if (!updated) throw new Error('Held credits are not available to return')
+    }
+
+    return true
+  }
+
+  private async getOrCreateExchangeConversation(
+    exchangeRow: typeof exchanges.$inferSelect,
+  ): Promise<Conversation> {
+    const [existing] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.exchangeId, exchangeRow.id))
+      .limit(1)
+
+    if (existing) {
+      await this.ensureConversationParticipants(existing.id, exchangeRow)
+      return this.hydrateConversation(existing.id)
+    }
+
+    const conversationId = await db.transaction(async (tx) => {
+      const now = new Date()
+      const [conversation] = await tx
+        .insert(conversations)
+        .values({ exchangeId: exchangeRow.id, updatedAt: now })
+        .onConflictDoNothing({ target: conversations.exchangeId })
+        .returning()
+
+      if (!conversation) {
+        const [createdByRace] = await tx
+          .select()
+          .from(conversations)
+          .where(eq(conversations.exchangeId, exchangeRow.id))
+          .limit(1)
+        if (!createdByRace) throw new Error('Unable to create exchange conversation')
+        return createdByRace.id
+      }
+
+      await tx
+        .insert(conversationParticipants)
+        .values([
+          {
+            conversationId: conversation.id,
+            memberId: exchangeRow.providerId,
+            lastReadAt: null,
+          },
+          {
+            conversationId: conversation.id,
+            memberId: exchangeRow.requesterId,
+            lastReadAt: null,
+          },
+        ])
+        .onConflictDoNothing({
+          target: [
+            conversationParticipants.conversationId,
+            conversationParticipants.memberId,
+          ],
+        })
+
+      return conversation.id
+    })
+
+    await this.ensureConversationParticipants(conversationId, exchangeRow)
+    return this.hydrateConversation(conversationId)
+  }
+
+  private async ensureConversationParticipants(
+    conversationId: string,
+    exchangeRow: typeof exchanges.$inferSelect,
+  ): Promise<void> {
+    await db
+      .insert(conversationParticipants)
+      .values([
+        {
+          conversationId,
+          memberId: exchangeRow.providerId,
+          lastReadAt: null,
+        },
+        {
+          conversationId,
+          memberId: exchangeRow.requesterId,
+          lastReadAt: null,
+        },
+      ])
+      .onConflictDoNothing({
+        target: [
+          conversationParticipants.conversationId,
+          conversationParticipants.memberId,
+        ],
+      })
+  }
+
+  private async hydrateConversation(conversationId: string): Promise<Conversation> {
+    const [conversation] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, conversationId))
+      .limit(1)
+
+    if (!conversation) throw new Error(`Conversation ${conversationId} not found`)
+
+    const participantRows = await db
+      .select()
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.conversationId, conversationId))
+
+    const memberIds = participantRows.map((row) => row.memberId)
+    const memberRows =
+      memberIds.length > 0
+        ? await db
+            .select()
+            .from(members)
+            .where(inArray(members.id, memberIds))
+        : []
+    const memberMap = new Map(memberRows.map((row) => [row.id, toMember(row)]))
+
+    return {
+      id: conversation.id,
+      exchangeId: conversation.exchangeId ?? null,
+      participants: participantRows.map((row) => ({
+        memberId: row.memberId,
+        member: memberMap.get(row.memberId),
+        lastReadAt: row.lastReadAt?.toISOString() ?? null,
+      })),
+      updatedAt: conversation.updatedAt.toISOString(),
+    }
+  }
+
   private async findDirectConversationId(
     memberIdA: string,
     memberIdB: string,
@@ -1444,6 +2106,17 @@ export class ExchangeEngineClient {
     ]
     if (candidateIds.length === 0) return null
 
+    const directConversationRows = await db
+      .select()
+      .from(conversations)
+      .where(inArray(conversations.id, candidateIds))
+    const directConversationIds = new Set(
+      directConversationRows
+        .filter((conversation) => conversation.exchangeId === null)
+        .map((conversation) => conversation.id),
+    )
+    if (directConversationIds.size === 0) return null
+
     const participantRows = await db
       .select({
         conversationId: conversationParticipants.conversationId,
@@ -1452,7 +2125,7 @@ export class ExchangeEngineClient {
       .from(conversationParticipants)
       .where(
         or(
-          ...candidateIds.map((conversationId) =>
+          ...[...directConversationIds].map((conversationId) =>
             eq(conversationParticipants.conversationId, conversationId),
           ),
         )!,

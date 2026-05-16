@@ -27,5 +27,6 @@ export const walletTransactions = pgTable('wallet_transactions', {
   amount: integer('amount').notNull(),
   description: varchar('description', { length: 500 }).notNull(),
   exchangeId: uuid('exchange_id'),
+  operationKey: varchar('operation_key', { length: 160 }).unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })

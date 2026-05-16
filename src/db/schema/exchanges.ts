@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, uuid, integer, timestamp } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, uuid, varchar, integer, timestamp } from 'drizzle-orm/pg-core'
 import { members } from './members'
 import { listings } from './listings'
 
@@ -16,6 +16,7 @@ export const exchanges = pgTable('exchanges', {
   listingId: uuid('listing_id').notNull().references(() => listings.id),
   providerId: uuid('provider_id').notNull().references(() => members.id),
   requesterId: uuid('requester_id').notNull().references(() => members.id),
+  idempotencyKey: varchar('idempotency_key', { length: 160 }).unique(),
   status: exchangeStatusEnum('status').default('requested').notNull(),
   tuAmount: integer('tu_amount').notNull(),
   scheduledAt: timestamp('scheduled_at', { withTimezone: true }),

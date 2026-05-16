@@ -17,6 +17,8 @@ The existing app already proves that a marketplace, wallet, booking, message, re
 - Remaining Phase 2 hardening: add deeper server-action tests for duplicate signup, invite exhaustion, expired invites, and multi-user data separation.
 - Phase 3: Complete. Needs/offers boards share marketplace filters, publish flows redirect to suggested matches, direct need responses create or reuse conversations, guided creation prompts support both listing types, listing refresh/expiration is modeled in the database and UI, and browser smoke coverage verifies filtering, post-need-to-offers, post-offer-to-needs, and need-response messaging.
 - Remaining Phase 3 hardening: none for the planned slice. Future polish can tune match scoring, distance ranking, and trust semantics after real usage data.
+- Phase 4: Complete. Exchange detail pages now render a full exchange room with shared status, schedule, messages, credit ledger, completion controls, cancellation/dispute paths, and inline review. Exchange conversations are tied directly to exchanges, booking updates stay in the room, and wallet movements use scoped idempotency keys so repeat completion cannot double-release or double-spend credits.
+- Remaining Phase 4 hardening: add two-sided completion approval, steward dispute resolution, and deeper concurrency tests around simultaneous cancel/complete attempts.
 
 ## Product Thesis
 

@@ -1,26 +1,25 @@
 import { exchangeEngine } from '@/lib/exchange-engine'
 import { PageHeader } from '@/components/shared/page-header'
 import { PageTransition } from '@/components/shared/page-transition'
-import { ExchangeStatusCard } from '@/components/exchange/exchange-status-card'
-import { CompletionCard } from '@/components/exchange/completion-card'
+import { ExchangeRoom } from '@/components/exchange/exchange-room'
 
 export default async function ExchangeDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ booked?: string; completed?: string }>
 }) {
   const { id } = await params
-  const query = await searchParams
   await exchangeEngine.initialize()
 
-  // Load the exchange with related data
-  const currentMember = await exchangeEngine.getCurrentMember()
-  const allExchanges = await exchangeEngine.getExchanges(currentMember.id)
-  const exchange = allExchanges.find((e) => e.id === id)
+  let room
+  try {
+    room = await exchangeEngine.getExchangeRoom(id)
+  } catch (error) {
+    console.error('Failed to load exchange room', error)
+    room = null
+  }
 
-  if (!exchange) {
+  if (!room) {
     return (
       <>
         <PageHeader title="Exchange" />
@@ -31,36 +30,12 @@ export default async function ExchangeDetailPage({
     )
   }
 
-  // If just completed, show celebration card
-  if (exchange.status === 'completed' && query.completed === '1') {
-    const provider = exchange.provider ?? await exchangeEngine.getMember(exchange.providerId)
-    const requester = exchange.requester ?? await exchangeEngine.getMember(exchange.requesterId)
-
-    return (
-      <>
-        <PageHeader title="Exchange Complete" />
-        <PageTransition>
-          <div className="pt-16">
-            <CompletionCard
-              exchange={exchange}
-              provider={provider}
-              requester={requester}
-            />
-          </div>
-        </PageTransition>
-      </>
-    )
-  }
-
   return (
     <>
-      <PageHeader title="Exchange" />
+      <PageHeader title="Exchange Room" />
       <PageTransition>
-        <div className="pt-16 pb-8 px-4">
-          <ExchangeStatusCard
-            exchange={exchange}
-            currentMemberId={currentMember.id}
-          />
+        <div className="pt-16 pb-safe-bottom px-4">
+          <ExchangeRoom room={room} />
         </div>
       </PageTransition>
     </>

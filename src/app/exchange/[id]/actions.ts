@@ -11,9 +11,100 @@ export async function completeExchangeAction(
     await exchangeEngine.completeExchange(exchangeId)
 
     revalidatePath(`/exchange/${exchangeId}`)
+    revalidatePath('/exchanges')
     return { success: true }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to complete exchange'
+    return { error: message }
+  }
+}
+
+export async function acceptExchangeAction(
+  exchangeId: string,
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    await exchangeEngine.initialize()
+    await exchangeEngine.acceptExchange(exchangeId)
+
+    revalidatePath(`/exchange/${exchangeId}`)
+    revalidatePath('/exchanges')
+    return { success: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to accept exchange'
+    return { error: message }
+  }
+}
+
+export async function scheduleExchangeAction(
+  exchangeId: string,
+  date: string,
+  startTime: string,
+  endTime: string,
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    await exchangeEngine.initialize()
+    await exchangeEngine.scheduleExchange(exchangeId, {
+      date,
+      startTime,
+      endTime,
+    })
+
+    revalidatePath(`/exchange/${exchangeId}`)
+    revalidatePath('/exchanges')
+    return { success: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to schedule exchange'
+    return { error: message }
+  }
+}
+
+export async function cancelExchangeAction(
+  exchangeId: string,
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    await exchangeEngine.initialize()
+    await exchangeEngine.cancelExchange(exchangeId)
+
+    revalidatePath(`/exchange/${exchangeId}`)
+    revalidatePath('/exchanges')
+    return { success: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to cancel exchange'
+    return { error: message }
+  }
+}
+
+export async function disputeExchangeAction(
+  exchangeId: string,
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    await exchangeEngine.initialize()
+    await exchangeEngine.disputeExchange(exchangeId)
+
+    revalidatePath(`/exchange/${exchangeId}`)
+    revalidatePath('/exchanges')
+    return { success: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to open dispute'
+    return { error: message }
+  }
+}
+
+export async function sendExchangeMessageAction(
+  exchangeId: string,
+  conversationId: string,
+  content: string,
+): Promise<{ success?: boolean; error?: string }> {
+  try {
+    await exchangeEngine.initialize()
+    await exchangeEngine.sendMessage({ conversationId, content })
+
+    revalidatePath(`/exchange/${exchangeId}`)
+    revalidatePath(`/messages/${conversationId}`)
+    revalidatePath('/messages')
+    return { success: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to send message'
     return { error: message }
   }
 }
@@ -35,6 +126,7 @@ export async function createReviewAction(
     })
 
     revalidatePath(`/exchange/${exchangeId}`)
+    revalidatePath('/exchanges')
     return { success: true }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to submit review'
