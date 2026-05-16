@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import { pgTable, pgEnum, uuid, varchar, text, integer, boolean, timestamp, json } from 'drizzle-orm/pg-core'
 import { members } from './members'
 
@@ -36,6 +37,8 @@ export const listings = pgTable('listings', {
   availabilityType: availabilityTypeEnum('availability_type').default('ongoing').notNull(),
   imageUrls: json('image_urls').$type<string[]>().default([]).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
+  refreshedAt: timestamp('refreshed_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).default(sql`now() + interval '45 days'`).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })

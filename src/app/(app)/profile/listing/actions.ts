@@ -44,6 +44,26 @@ export async function updateListingAction(
   }
 }
 
+export async function refreshListingAction(
+  id: string,
+): Promise<{ id?: string; error?: string }> {
+  try {
+    await exchangeEngine.initialize()
+    const listing = await exchangeEngine.refreshListing(id)
+    revalidatePath('/profile')
+    revalidatePath(`/listing/${id}`)
+    revalidatePath(`/listing/${id}/matches`)
+    revalidatePath('/search')
+    revalidatePath('/needs')
+    revalidatePath('/offers')
+    return { id: listing.id }
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'Failed to refresh listing',
+    }
+  }
+}
+
 export async function deleteListingAction(
   id: string,
 ): Promise<{ ok?: true; error?: string }> {

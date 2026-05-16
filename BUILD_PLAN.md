@@ -15,8 +15,8 @@ The existing app already proves that a marketplace, wallet, booking, message, re
 - Phase 1: Implemented. The app now presents a neighborhood exchange product with Needs, Offers, Exchanges, Messages, and Me as the primary navigation.
 - Phase 2: In progress. Account tables, password auth, HTTP-only sessions, sign-in, sign-up, sign-out, protected app routes, session-derived current member resolution, persisted profile edits, community selection, invite codes, auth/community smoke coverage, and browser validation for sign-in/sign-up are implemented.
 - Remaining Phase 2 hardening: add deeper server-action tests for duplicate signup, invite exhaustion, expired invites, and multi-user data separation.
-- Phase 3: In progress. Needs/offers boards now share marketplace filters, publish flows redirect to suggested matches, and browser smoke coverage verifies filtering plus post-need-to-matches.
-- Remaining Phase 3 hardening: add direct conversation creation for responding to needs, richer guided creation prompts, and real listing expiration/refresh state beyond the current stale-listing badge.
+- Phase 3: Complete. Needs/offers boards share marketplace filters, publish flows redirect to suggested matches, direct need responses create or reuse conversations, guided creation prompts support both listing types, listing refresh/expiration is modeled in the database and UI, and browser smoke coverage verifies filtering, post-need-to-offers, post-offer-to-needs, and need-response messaging.
+- Remaining Phase 3 hardening: none for the planned slice. Future polish can tune match scoring, distance ranking, and trust semantics after real usage data.
 
 ## Product Thesis
 

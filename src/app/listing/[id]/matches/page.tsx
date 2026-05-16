@@ -119,7 +119,7 @@ export default async function ListingMatchesPage({
                         }
                         className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-dark"
                       >
-                        {isNeed ? 'Request this offer' : 'View this need'}
+                        {isNeed ? 'Request this offer' : 'Respond to this need'}
                         <ArrowRight size={15} />
                       </Link>
                     </div>

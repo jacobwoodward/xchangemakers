@@ -17,6 +17,69 @@ import {
 } from '@/app/(app)/profile/listing/actions'
 import { AVAILABILITY_OPTIONS, LISTING_CATEGORIES } from '@/lib/marketplace'
 
+const LISTING_FORM_GUIDANCE: Record<
+  ListingType,
+  {
+    badge: string
+    heading: string
+    copy: string
+    titleLabel: string
+    titlePlaceholder: string
+    descriptionLabel: string
+    descriptionPlaceholder: string
+    detailPrompts: string[]
+  }
+> = {
+  offering: {
+    badge: 'Offer',
+    heading: 'Make it easy to say yes',
+    copy: 'Describe the outcome, what is included, and when you are usually available.',
+    titleLabel: 'What can you offer?',
+    titlePlaceholder: 'e.g. Homemade sourdough loaf',
+    descriptionLabel: 'What should neighbors expect?',
+    descriptionPlaceholder:
+      'Include what is included, how much notice you need, where it happens, and what a good exchange looks like.',
+    detailPrompts: [
+      'What is included',
+      'Where or how it happens',
+      'How much notice you need',
+    ],
+  },
+  need: {
+    badge: 'Need',
+    heading: 'Ask for a concrete outcome',
+    copy: 'Be specific about the help you need, when it matters, and what would make the exchange feel complete.',
+    titleLabel: 'What do you need help with?',
+    titlePlaceholder: 'e.g. Need help moving furniture',
+    descriptionLabel: 'What would help look like?',
+    descriptionPlaceholder:
+      'Include the task, timing, location or constraints, and what someone should know before responding.',
+    detailPrompts: [
+      'What needs to happen',
+      'When you need it',
+      'Any constraints or supplies',
+    ],
+  },
+}
+
+const CREDIT_SUGGESTIONS: Record<
+  ListingType,
+  { label: string; value: number; hint: string }[]
+> = {
+  offering: [
+    { label: 'Open', value: 0, hint: 'Let neighbors suggest' },
+    { label: '1 credit', value: 1, hint: 'Quick favor' },
+    { label: '2 credits', value: 2, hint: 'Focused help' },
+    { label: '3 credits', value: 3, hint: 'Bigger task' },
+  ],
+  need: [
+    { label: 'Open', value: 0, hint: 'Not sure yet' },
+    { label: '1 credit', value: 1, hint: 'Quick help' },
+    { label: '2 credits', value: 2, hint: 'Clear task' },
+    { label: '3 credits', value: 3, hint: 'More involved' },
+  ],
+}
+
 export interface ListingFormProps {
   mode: 'create' | 'edit'
   initialValues?: Partial<CreateListingInput>
@@ -46,6 +109,8 @@ export function ListingForm({
   const [availabilityType, setAvailabilityType] = useState<AvailabilityType>(
     initialValues?.availabilityType ?? 'ongoing',
   )
+  const guidance = LISTING_FORM_GUIDANCE[type]
+  const creditSuggestions = CREDIT_SUGGESTIONS[type]
 
   const canSubmit = title.trim().length > 0 && description.trim().length > 0 && !isPending
 
@@ -118,18 +183,44 @@ export function ListingForm({
         </Card>
       )}
 
+      {mode === 'create' && (
+        <Card className="space-y-3">
+          <Badge variant={type === 'need' ? 'accent' : 'primary'}>
+            {guidance.badge}
+          </Badge>
+          <div className="space-y-1">
+            <h3 className="text-sm font-semibold text-heading">
+              {guidance.heading}
+            </h3>
+            <p className="text-xs leading-relaxed text-muted">
+              {guidance.copy}
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {guidance.detailPrompts.map((prompt) => (
+              <div
+                key={prompt}
+                className="rounded-lg border border-border-light bg-hover px-2.5 py-2 text-[11px] font-medium leading-snug text-secondary"
+              >
+                {prompt}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {/* Title */}
       <Card>
         <label className="block">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-            Title
+            {guidance.titleLabel}
           </span>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             maxLength={200}
-            placeholder={type === 'offering' ? 'e.g. Homemade sourdough loaf' : 'e.g. Need help moving furniture'}
+            placeholder={guidance.titlePlaceholder}
             className="mt-1.5 w-full rounded-lg border border-border-light bg-surface px-3 py-2.5 text-sm text-body placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </label>
@@ -139,13 +230,13 @@ export function ListingForm({
       <Card>
         <label className="block">
           <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-            Description
+            {guidance.descriptionLabel}
           </span>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={4}
-            placeholder="Give your neighbors the details — what, when, how, anything special?"
+            placeholder={guidance.descriptionPlaceholder}
             className="mt-1.5 w-full rounded-lg border border-border-light bg-surface px-3 py-2.5 text-sm text-body placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
           />
         </label>
@@ -201,6 +292,28 @@ export function ListingForm({
             </span>
           </div>
         </label>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {creditSuggestions.map((suggestion) => (
+            <button
+              key={`${suggestion.label}-${suggestion.value}`}
+              type="button"
+              onClick={() => setCreditPrice(suggestion.value)}
+              className={cn(
+                'rounded-lg border px-3 py-2 text-left transition-colors',
+                creditPrice === suggestion.value
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border-light bg-surface hover:bg-hover',
+              )}
+            >
+              <span className="block text-xs font-semibold text-heading">
+                {suggestion.label}
+              </span>
+              <span className="mt-0.5 block text-[11px] text-muted">
+                {suggestion.hint}
+              </span>
+            </button>
+          ))}
+        </div>
       </Card>
 
       {/* Availability */}

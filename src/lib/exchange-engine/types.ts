@@ -158,7 +158,10 @@ export interface Listing {
   availabilityType: AvailabilityType
   imageUrls: string[]
   isActive: boolean
+  refreshedAt: string
+  expiresAt: string
   createdAt: string
+  updatedAt: string
   member?: Member
 }
 

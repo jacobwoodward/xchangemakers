@@ -1,5 +1,6 @@
 import type {
   AvailabilityType,
+  Listing,
   ListingCategory,
   ListingType,
   MarketplaceDistanceScope,
@@ -31,6 +32,11 @@ export const AVAILABILITY_OPTIONS: {
 ]
 
 export type CreditFilter = 'any' | 'open' | '1-2' | '3-plus'
+
+export const LISTING_LIFETIME_DAYS = 45
+export const LISTING_REFRESH_WINDOW_DAYS = 7
+
+export type ListingLifecycleState = 'active' | 'refresh_soon' | 'expired'
 
 export interface MarketplaceFilterValues {
   query: string
@@ -145,4 +151,33 @@ export function formatCategory(category: string): string {
 export function formatCredits(amount: number): string {
   if (amount === 0) return 'Open'
   return `${amount} ${amount === 1 ? 'credit' : 'credits'}`
+}
+
+export function getListingLifecycle(
+  listing: Pick<Listing, 'expiresAt'>,
+  now = new Date(),
+): { state: ListingLifecycleState; daysRemaining: number } {
+  const expiresAt = new Date(listing.expiresAt)
+  const millisecondsRemaining = expiresAt.getTime() - now.getTime()
+  const daysRemaining = Math.ceil(millisecondsRemaining / (1000 * 60 * 60 * 24))
+
+  if (millisecondsRemaining <= 0) {
+    return { state: 'expired', daysRemaining: 0 }
+  }
+
+  if (daysRemaining <= LISTING_REFRESH_WINDOW_DAYS) {
+    return { state: 'refresh_soon', daysRemaining }
+  }
+
+  return { state: 'active', daysRemaining }
+}
+
+export function formatListingExpiration(
+  listing: Pick<Listing, 'expiresAt'>,
+): string {
+  const lifecycle = getListingLifecycle(listing)
+
+  if (lifecycle.state === 'expired') return 'Expired'
+  if (lifecycle.daysRemaining === 1) return 'Expires tomorrow'
+  return `Expires in ${lifecycle.daysRemaining} days`
 }

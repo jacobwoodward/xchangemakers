@@ -144,6 +144,7 @@ async function migrate() {
   await ensureCommunityTables();
   await seedCommunities();
   await ensureAuthTables();
+  await ensureListingLifecycleColumns();
 }
 
 async function ensureCommunityTables() {
@@ -229,6 +230,39 @@ async function ensureAuthTables() {
 
     CREATE INDEX IF NOT EXISTS auth_sessions_token_hash_idx ON auth_sessions(token_hash);
     CREATE INDEX IF NOT EXISTS auth_sessions_expires_at_idx ON auth_sessions(expires_at);
+  `);
+}
+
+async function ensureListingLifecycleColumns() {
+  const listingsTable = await sql`
+    SELECT count(*)::int as c FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'listings'
+  `;
+
+  if (listingsTable[0].c === 0) return;
+
+  await sql.unsafe(`
+    ALTER TABLE listings
+      ADD COLUMN IF NOT EXISTS refreshed_at timestamptz,
+      ADD COLUMN IF NOT EXISTS expires_at timestamptz;
+
+    UPDATE listings
+    SET
+      refreshed_at = COALESCE(refreshed_at, updated_at, created_at, now()),
+      expires_at = COALESCE(
+        expires_at,
+        COALESCE(refreshed_at, updated_at, created_at, now()) + interval '45 days'
+      )
+    WHERE refreshed_at IS NULL OR expires_at IS NULL;
+
+    ALTER TABLE listings
+      ALTER COLUMN refreshed_at SET DEFAULT now(),
+      ALTER COLUMN refreshed_at SET NOT NULL,
+      ALTER COLUMN expires_at SET DEFAULT (now() + interval '45 days'),
+      ALTER COLUMN expires_at SET NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS listings_active_expires_at_idx
+      ON listings(is_active, expires_at);
   `);
 }
 
@@ -358,6 +392,8 @@ async function createSchema() {
       availability_type availability_type NOT NULL DEFAULT 'ongoing',
       image_urls jsonb NOT NULL DEFAULT '[]',
       is_active boolean NOT NULL DEFAULT true,
+      refreshed_at timestamptz NOT NULL DEFAULT now(),
+      expires_at timestamptz NOT NULL DEFAULT (now() + interval '45 days'),
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     );

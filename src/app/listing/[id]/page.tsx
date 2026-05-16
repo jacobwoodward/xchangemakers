@@ -9,8 +9,18 @@ import {
   PartyPopper,
   Clock,
   CalendarCheck,
+  MessageCircle,
+  RefreshCw,
 } from 'lucide-react'
 import type { AvailabilityType } from '@/lib/exchange-engine'
+import {
+  formatListingExpiration,
+  getListingLifecycle,
+} from '@/lib/marketplace'
+import {
+  refreshListingFromDetailAction,
+  respondToListingAction,
+} from './actions'
 
 const AVAILABILITY_ICON: Record<AvailabilityType, typeof Repeat> = {
   ongoing: Repeat,
@@ -36,6 +46,10 @@ export default async function ListingDetailPage({
   const { id } = await params
   await exchangeEngine.initialize()
   const listing = await exchangeEngine.getListing(id)
+  const currentMember = await exchangeEngine.getCurrentMember()
+  const isOwner = currentMember.id === listing.memberId
+  const lifecycle = getListingLifecycle(listing)
+  const isExpired = lifecycle.state === 'expired'
 
   const AvailIcon = AVAILABILITY_ICON[listing.availabilityType] ?? Repeat
   const availLabel = AVAILABILITY_LABEL[listing.availabilityType] ?? listing.availabilityType
@@ -73,7 +87,31 @@ export default async function ListingDetailPage({
             <Badge variant={listing.type === 'offering' ? 'primary' : 'accent'}>
               {listing.type === 'offering' ? 'Offering' : 'Need'}
             </Badge>
+            <Badge variant={isExpired ? 'outline' : 'default'}>
+              {formatListingExpiration(listing)}
+            </Badge>
           </div>
+
+          {(isExpired || lifecycle.state === 'refresh_soon') && (
+            <Card className="space-y-2">
+              <h3 className="text-sm font-semibold text-heading">
+                {isExpired ? 'This listing has expired' : 'Refresh this listing soon'}
+              </h3>
+              <p className="text-xs leading-relaxed text-muted">
+                {isOwner
+                  ? 'Refresh it to keep it visible on the marketplace boards.'
+                  : 'This listing is not accepting new responses right now.'}
+              </p>
+              {isOwner && (
+                <form action={refreshListingFromDetailAction.bind(null, listing.id)}>
+                  <Button type="submit" variant="secondary" size="sm" className="w-full">
+                    <RefreshCw size={15} />
+                    Refresh listing
+                  </Button>
+                </form>
+              )}
+            </Card>
+          )}
 
           {/* ─── Description ─── */}
           <Card>
@@ -126,20 +164,44 @@ export default async function ListingDetailPage({
           style={{ maxWidth: 'var(--xm-content-max-width)' }}
         >
           <Link
-            href={
-              listing.type === 'offering'
-                ? `/booking/${listing.id}`
-                : listing.member
-                  ? `/member/${listing.member.id}`
-                  : '/messages'
-            }
-            className="block"
+            href={listing.type === 'need' ? '/needs' : '/offers'}
+            className={isExpired && !isOwner ? 'block' : 'hidden'}
           >
-            <Button variant="primary" size="lg" className="w-full">
-              <CalendarCheck size={18} />
-              {listing.type === 'offering' ? 'Request This Offer' : 'Respond to This Need'}
+            <Button variant="secondary" size="lg" className="w-full">
+              Browse active listings
             </Button>
           </Link>
+          {isOwner ? (
+            lifecycle.state === 'active' ? (
+              <Link href={`/listing/${listing.id}/matches`} className="block">
+                <Button variant="primary" size="lg" className="w-full">
+                  <CalendarCheck size={18} />
+                  See Suggested Matches
+                </Button>
+              </Link>
+            ) : (
+              <form action={refreshListingFromDetailAction.bind(null, listing.id)}>
+                <Button type="submit" variant="primary" size="lg" className="w-full">
+                  <RefreshCw size={18} />
+                  Refresh Listing
+                </Button>
+              </form>
+            )
+          ) : !isExpired && listing.type === 'offering' ? (
+            <Link href={`/booking/${listing.id}`} className="block">
+              <Button variant="primary" size="lg" className="w-full">
+                <CalendarCheck size={18} />
+                Request This Offer
+              </Button>
+            </Link>
+          ) : !isExpired ? (
+            <form action={respondToListingAction.bind(null, listing.id)}>
+              <Button type="submit" variant="primary" size="lg" className="w-full">
+                <MessageCircle size={18} />
+                Respond to This Need
+              </Button>
+            </form>
+          ) : null}
         </div>
       </div>
     </>

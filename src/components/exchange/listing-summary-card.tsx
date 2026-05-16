@@ -8,7 +8,11 @@ import {
   PartyPopper,
   Repeat,
 } from 'lucide-react'
-import { formatCategory, formatCredits } from '@/lib/marketplace'
+import {
+  formatCategory,
+  formatCredits,
+  getListingLifecycle,
+} from '@/lib/marketplace'
 
 interface ListingSummaryCardProps {
   listing: Listing
@@ -34,8 +38,7 @@ export function ListingSummaryCard({
   const AvailabilityIcon = AVAILABILITY_ICON[listing.availabilityType] ?? Repeat
   const TypeIcon = context === 'need' ? CircleHelp : HandHeart
   const href = `/listing/${listing.id}`
-  const isStale =
-    Date.now() - new Date(listing.createdAt).getTime() > 1000 * 60 * 60 * 24 * 30
+  const lifecycle = getListingLifecycle(listing)
 
   return (
     <Link href={href} className="block">
@@ -66,9 +69,14 @@ export function ListingSummaryCard({
               <Badge variant="default" className="text-[10px]">
                 {formatCategory(listing.category)}
               </Badge>
-              {isStale && (
+              {lifecycle.state === 'refresh_soon' && (
                 <Badge variant="outline" className="text-[10px]">
                   Refresh soon
+                </Badge>
+              )}
+              {lifecycle.state === 'expired' && (
+                <Badge variant="outline" className="text-[10px]">
+                  Expired
                 </Badge>
               )}
               <span className="inline-flex items-center gap-1 text-[10px] font-medium text-muted">

@@ -26,7 +26,7 @@ import {
   conversationParticipants,
   messages,
 } from '@/db/schema'
-import { eq, ilike, and, or, desc, sql, asc, gte, lte, ne } from 'drizzle-orm'
+import { eq, ilike, and, or, desc, sql, asc, gte, lte, ne, gt } from 'drizzle-orm'
 import { requireCurrentMemberId } from '@/lib/auth/session'
 
 import type {
@@ -66,6 +66,12 @@ import {
   ONBOARDING_TU_REWARDS,
   ONBOARDING_STEP_LABELS,
 } from './constants'
+
+const LISTING_LIFETIME_DAYS = 45
+
+function getListingExpiresAt(from = new Date()): Date {
+  return new Date(from.getTime() + LISTING_LIFETIME_DAYS * 24 * 60 * 60 * 1000)
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -135,7 +141,10 @@ function toListing(
     availabilityType: row.availabilityType,
     imageUrls: row.imageUrls ?? [],
     isActive: row.isActive,
+    refreshedAt: row.refreshedAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
     ...(member ? { member } : {}),
   }
 }
@@ -224,12 +233,18 @@ export class ExchangeEngineClient {
     const [row] = await db.select().from(members).where(eq(members.id, id))
     if (!row) throw new Error(`Member ${id} not found`)
 
-    return this.hydrateMember(row)
+    return this.hydrateMember(row, id === this.currentMemberId)
   }
 
   async getCurrentMember(): Promise<MemberWithDetails> {
     if (!this.currentMemberId) await this.initialize()
-    return this.getMember(this.currentMemberId)
+    const [row] = await db
+      .select()
+      .from(members)
+      .where(eq(members.id, this.currentMemberId))
+    if (!row) throw new Error(`Member ${this.currentMemberId} not found`)
+
+    return this.hydrateMember(row, true)
   }
 
   // ---- Wallet -------------------------------------------------------------
@@ -258,7 +273,10 @@ export class ExchangeEngineClient {
   // ---- Listings -----------------------------------------------------------
 
   async getListings(filters?: SearchFilters): Promise<Listing[]> {
-    const conditions = [eq(listings.isActive, true)]
+    const conditions = [
+      eq(listings.isActive, true),
+      gt(listings.expiresAt, new Date()),
+    ]
 
     if (filters?.category) {
       conditions.push(eq(listings.category, filters.category))
@@ -309,7 +327,10 @@ export class ExchangeEngineClient {
       .limit(1)
     const currentMember = currentMemberRow ? toMember(currentMemberRow) : null
 
-    const conditions = [eq(listings.isActive, true)]
+    const conditions = [
+      eq(listings.isActive, true),
+      gt(listings.expiresAt, new Date()),
+    ]
     const distanceScope = filters.distance ?? 'community'
 
     if (filters.category) {
@@ -475,6 +496,8 @@ export class ExchangeEngineClient {
   async createListing(input: CreateListingInput): Promise<Listing> {
     if (!this.currentMemberId) await this.initialize()
 
+    const now = new Date()
+
     const [row] = await db
       .insert(listings)
       .values({
@@ -486,6 +509,8 @@ export class ExchangeEngineClient {
         creditPrice: input.creditPrice,
         availabilityType: input.availabilityType ?? 'ongoing',
         imageUrls: input.imageUrls ?? [],
+        refreshedAt: now,
+        expiresAt: getListingExpiresAt(now),
       })
       .returning()
 
@@ -551,6 +576,33 @@ export class ExchangeEngineClient {
       .where(eq(listings.id, id))
   }
 
+  async refreshListing(id: string): Promise<Listing> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const [existing] = await db
+      .select()
+      .from(listings)
+      .where(eq(listings.id, id))
+    if (!existing) throw new Error(`Listing ${id} not found`)
+    if (existing.memberId !== this.currentMemberId) {
+      throw new Error('Not authorized to refresh this listing')
+    }
+
+    const now = new Date()
+    const [row] = await db
+      .update(listings)
+      .set({
+        isActive: true,
+        refreshedAt: now,
+        expiresAt: getListingExpiresAt(now),
+        updatedAt: now,
+      })
+      .where(eq(listings.id, id))
+      .returning()
+
+    return toListing(row)
+  }
+
   // ---- Search (person-first) ----------------------------------------------
 
   /**
@@ -558,7 +610,10 @@ export class ExchangeEngineClient {
    * listings. Business members go in `shopLocal`, everyone else in `neighbors`.
    */
   async search(query: string, filters?: SearchFilters): Promise<SearchResult> {
-    const conditions = [eq(listings.isActive, true)]
+    const conditions = [
+      eq(listings.isActive, true),
+      gt(listings.expiresAt, new Date()),
+    ]
 
     if (query) {
       conditions.push(
@@ -1107,6 +1162,60 @@ export class ExchangeEngineClient {
 
   // ---- Messages -----------------------------------------------------------
 
+  async startListingConversation(listingId: string): Promise<string> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const listing = await this.getListing(listingId)
+    if (!listing.isActive || new Date(listing.expiresAt) <= new Date()) {
+      throw new Error('This listing is no longer active')
+    }
+    if (listing.memberId === this.currentMemberId) {
+      throw new Error('You cannot respond to your own listing')
+    }
+
+    const existingConversationId = await this.findDirectConversationId(
+      this.currentMemberId,
+      listing.memberId,
+    )
+    if (existingConversationId) return existingConversationId
+
+    const recipientName = listing.member?.firstName ?? 'there'
+    const openingLine =
+      listing.type === 'need'
+        ? `Hi ${recipientName} - I can help with "${listing.title}". Can we talk through timing, scope, and credits?`
+        : `Hi ${recipientName} - I am interested in "${listing.title}". Can we talk through timing, scope, and credits?`
+
+    return await db.transaction(async (tx) => {
+      const now = new Date()
+      const [conversation] = await tx
+        .insert(conversations)
+        .values({ updatedAt: now })
+        .returning()
+
+      await tx.insert(conversationParticipants).values([
+        {
+          conversationId: conversation.id,
+          memberId: this.currentMemberId,
+          lastReadAt: now,
+        },
+        {
+          conversationId: conversation.id,
+          memberId: listing.memberId,
+          lastReadAt: null,
+        },
+      ])
+
+      await tx.insert(messages).values({
+        conversationId: conversation.id,
+        senderId: this.currentMemberId,
+        content: openingLine,
+        createdAt: now,
+      })
+
+      return conversation.id
+    })
+  }
+
   async getConversations(memberId: string): Promise<Conversation[]> {
     // Get conversations this member participates in
     const participantRows = await db
@@ -1222,6 +1331,21 @@ export class ExchangeEngineClient {
   async sendMessage(input: SendMessageInput): Promise<Message> {
     if (!this.currentMemberId) await this.initialize()
 
+    const [participant] = await db
+      .select()
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, input.conversationId),
+          eq(conversationParticipants.memberId, this.currentMemberId),
+        ),
+      )
+      .limit(1)
+
+    if (!participant) {
+      throw new Error('Not authorized to send a message in this conversation')
+    }
+
     const [row] = await db
       .insert(messages)
       .values({
@@ -1299,21 +1423,83 @@ export class ExchangeEngineClient {
 
   // ---- Private helpers ----------------------------------------------------
 
+  private async findDirectConversationId(
+    memberIdA: string,
+    memberIdB: string,
+  ): Promise<string | null> {
+    const matchingParticipantRows = await db
+      .select({
+        conversationId: conversationParticipants.conversationId,
+      })
+      .from(conversationParticipants)
+      .where(
+        or(
+          eq(conversationParticipants.memberId, memberIdA),
+          eq(conversationParticipants.memberId, memberIdB),
+        )!,
+      )
+
+    const candidateIds = [
+      ...new Set(matchingParticipantRows.map((row) => row.conversationId)),
+    ]
+    if (candidateIds.length === 0) return null
+
+    const participantRows = await db
+      .select({
+        conversationId: conversationParticipants.conversationId,
+        memberId: conversationParticipants.memberId,
+      })
+      .from(conversationParticipants)
+      .where(
+        or(
+          ...candidateIds.map((conversationId) =>
+            eq(conversationParticipants.conversationId, conversationId),
+          ),
+        )!,
+      )
+
+    const conversationMembers = new Map<string, Set<string>>()
+    for (const row of participantRows) {
+      const membersForConversation =
+        conversationMembers.get(row.conversationId) ?? new Set<string>()
+      membersForConversation.add(row.memberId)
+      conversationMembers.set(row.conversationId, membersForConversation)
+    }
+
+    for (const [conversationId, memberIds] of conversationMembers.entries()) {
+      if (
+        memberIds.size === 2 &&
+        memberIds.has(memberIdA) &&
+        memberIds.has(memberIdB)
+      ) {
+        return conversationId
+      }
+    }
+
+    return null
+  }
+
   /**
    * Hydrate a raw member row into a full MemberWithDetails — loads listings,
    * reputation tags, wallet, and computes trust score.
    */
   private async hydrateMember(
     row: typeof members.$inferSelect,
+    includeExpiredListings = false,
   ): Promise<MemberWithDetails> {
     const member = toMember(row)
+    const listingConditions = [
+      eq(listings.memberId, row.id),
+      eq(listings.isActive, true),
+      ...(includeExpiredListings ? [] : [gt(listings.expiresAt, new Date())]),
+    ]
 
     // Load listings, wallet, exchanges, and reputation tags in parallel
     const [listingRows, walletRow, exchangeRows, tagRows] = await Promise.all([
       db
         .select()
         .from(listings)
-        .where(and(eq(listings.memberId, row.id), eq(listings.isActive, true))),
+        .where(and(...listingConditions)),
       db.select().from(wallets).where(eq(wallets.memberId, row.id)),
       db
         .select()

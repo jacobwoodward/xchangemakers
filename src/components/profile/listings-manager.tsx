@@ -13,8 +13,16 @@ import {
   Pencil,
   Trash2,
   MoreVertical,
+  RefreshCw,
 } from 'lucide-react'
-import { deleteListingAction } from '@/app/(app)/profile/listing/actions'
+import {
+  deleteListingAction,
+  refreshListingAction,
+} from '@/app/(app)/profile/listing/actions'
+import {
+  formatListingExpiration,
+  getListingLifecycle,
+} from '@/lib/marketplace'
 
 interface ListingsManagerProps {
   offerings: Listing[]
@@ -42,11 +50,23 @@ function ListingRow({ listing }: { listing: Listing }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const router = useRouter()
   const AvailIcon = AVAILABILITY_ICON[listing.availabilityType] ?? Repeat
+  const lifecycle = getListingLifecycle(listing)
 
   const handleDelete = () => {
     if (!confirm(`Remove "${listing.title}"?`)) return
     startTransition(async () => {
       const result = await deleteListingAction(listing.id)
+      if (result.error) {
+        alert(result.error)
+        return
+      }
+      router.refresh()
+    })
+  }
+
+  const handleRefresh = () => {
+    startTransition(async () => {
+      const result = await refreshListingAction(listing.id)
       if (result.error) {
         alert(result.error)
         return
@@ -94,6 +114,12 @@ function ListingRow({ listing }: { listing: Listing }) {
           <Badge variant="default" className="text-[10px]">
             {formatCategory(listing.category)}
           </Badge>
+          <Badge
+            variant={lifecycle.state === 'expired' ? 'outline' : 'default'}
+            className="text-[10px]"
+          >
+            {formatListingExpiration(listing)}
+          </Badge>
           <div className="flex items-center gap-1 text-muted">
             <AvailIcon size={11} />
             <span className="text-[10px] font-medium">
@@ -116,6 +142,15 @@ function ListingRow({ listing }: { listing: Listing }) {
             <Pencil size={14} />
             Edit
           </Link>
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isPending}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-body hover:bg-hover transition-colors text-left"
+          >
+            <RefreshCw size={14} />
+            {isPending ? 'Refreshing...' : 'Refresh'}
+          </button>
           <button
             type="button"
             onClick={handleDelete}
