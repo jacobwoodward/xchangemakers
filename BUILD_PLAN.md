@@ -18,7 +18,9 @@ The existing app already proves that a marketplace, wallet, booking, message, re
 - Phase 3: Complete. Needs/offers boards share marketplace filters, publish flows redirect to suggested matches, direct need responses create or reuse conversations, guided creation prompts support both listing types, listing refresh/expiration is modeled in the database and UI, and browser smoke coverage verifies filtering, post-need-to-offers, post-offer-to-needs, and need-response messaging.
 - Remaining Phase 3 hardening: none for the planned slice. Future polish can tune match scoring, distance ranking, and trust semantics after real usage data.
 - Phase 4: Complete. Exchange detail pages now render a full exchange room with shared status, schedule, messages, credit ledger, completion controls, cancellation/dispute paths, and inline review. Exchange conversations are tied directly to exchanges, booking updates stay in the room, and wallet movements use scoped idempotency keys so repeat completion cannot double-release or double-spend credits.
-- Remaining Phase 4 hardening: add two-sided completion approval, steward dispute resolution, and deeper concurrency tests around simultaneous cancel/complete attempts.
+- Remaining Phase 4 hardening: add two-sided completion approval and deeper concurrency tests around simultaneous cancel/complete attempts.
+- Phase 5: Complete. Community stewardship now has member status and steward role fields, a steward console, member approval and pause controls, invite usage tracking, match-assist queues, stale listing and past-event cleanup, flagged content review, steward dispute resolution, and community health metrics.
+- Remaining Phase 5 hardening: add an audit log for steward actions, expose steward role assignment outside seed/migration data, add member-facing flag entry points, and replace hard-deleting past events with a durable archived-event state if communities need historical event records.
 
 ## Product Thesis
 

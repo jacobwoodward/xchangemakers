@@ -8,6 +8,8 @@
 
 import { db } from '@/db'
 import {
+  communities,
+  communityInvites,
   members,
   wallets,
   walletTransactions,
@@ -25,12 +27,16 @@ import {
   conversations,
   conversationParticipants,
   messages,
+  stewardFlags,
 } from '@/db/schema'
 import { eq, ilike, and, or, desc, sql, asc, gte, lte, ne, gt, inArray } from 'drizzle-orm'
 import { requireCurrentMemberId } from '@/lib/auth/session'
 
 import type {
   Member,
+  MemberStatus,
+  Community,
+  CommunityInvite,
   MemberWithDetails,
   Wallet,
   WalletTransaction,
@@ -52,6 +58,9 @@ import type {
   Conversation,
   Message,
   ExchangeRoom,
+  StewardDashboard,
+  StewardFlag,
+  StewardFlagTarget,
   SearchFilters,
   SearchResult,
   MarketplaceListingFilters,
@@ -96,7 +105,38 @@ function toMember(row: typeof members.$inferSelect): Member {
     isAvailable: row.isAvailable,
     availabilityNote: row.availabilityNote ?? null,
     membershipType: row.membershipType,
+    status: row.status,
+    isSteward: row.isSteward,
+    reviewedAt: row.reviewedAt?.toISOString() ?? null,
     joinedAt: row.joinedAt.toISOString(),
+  }
+}
+
+function toCommunity(row: typeof communities.$inferSelect): Community {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    city: row.city,
+    region: row.region,
+    postalCode: row.postalCode ?? null,
+    status: row.status,
+    inviteOnly: row.inviteOnly,
+  }
+}
+
+function toCommunityInvite(row: typeof communityInvites.$inferSelect): CommunityInvite {
+  return {
+    id: row.id,
+    communityId: row.communityId,
+    code: row.code,
+    label: row.label,
+    maxUses: row.maxUses ?? null,
+    usageCount: row.usageCount,
+    expiresAt: row.expiresAt?.toISOString() ?? null,
+    isActive: row.isActive,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   }
 }
 
@@ -226,6 +266,29 @@ function toHappening(
     goingCount,
     interestedCount,
     ...(host ? { host } : {}),
+  }
+}
+
+function toStewardFlag(
+  row: typeof stewardFlags.$inferSelect,
+  targetLabel: string,
+  targetHref: string | null,
+  createdBy?: Member,
+): StewardFlag {
+  return {
+    id: row.id,
+    targetType: row.targetType,
+    targetId: row.targetId,
+    targetLabel,
+    targetHref,
+    reason: row.reason,
+    status: row.status,
+    createdById: row.createdById ?? null,
+    ...(createdBy ? { createdBy } : {}),
+    resolvedById: row.resolvedById ?? null,
+    resolvedAt: row.resolvedAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   }
 }
 
@@ -1805,6 +1868,490 @@ export class ExchangeEngineClient {
     }
   }
 
+  // ---- Stewardship -------------------------------------------------------
+
+  async getStewardDashboard(): Promise<StewardDashboard> {
+    const stewardRow = await this.ensureCurrentSteward()
+    const currentSteward = toMember(stewardRow)
+    const communityId = stewardRow.communityId ?? null
+    const now = new Date()
+    const staleCutoff = new Date(now.getTime() - 35 * 24 * 60 * 60 * 1000)
+
+    const [communityRows, memberRows, inviteRows] = await Promise.all([
+      communityId
+        ? db.select().from(communities).where(eq(communities.id, communityId)).limit(1)
+        : Promise.resolve([]),
+      communityId
+        ? db
+            .select()
+            .from(members)
+            .where(eq(members.communityId, communityId))
+            .orderBy(asc(members.createdAt))
+        : db.select().from(members).orderBy(asc(members.createdAt)),
+      communityId
+        ? db
+            .select()
+            .from(communityInvites)
+            .where(eq(communityInvites.communityId, communityId))
+            .orderBy(asc(communityInvites.createdAt))
+        : db.select().from(communityInvites).orderBy(asc(communityInvites.createdAt)),
+    ])
+
+    const scopedMemberIds = memberRows.map((row) => row.id)
+    const [listingRows, exchangeRows, happeningRows, flagRows] = await Promise.all([
+      communityId
+        ? db
+            .select({ listing: listings, member: members })
+            .from(listings)
+            .innerJoin(members, eq(listings.memberId, members.id))
+            .where(eq(members.communityId, communityId))
+            .orderBy(desc(listings.updatedAt))
+        : db
+            .select({ listing: listings, member: members })
+            .from(listings)
+            .innerJoin(members, eq(listings.memberId, members.id))
+            .orderBy(desc(listings.updatedAt)),
+      scopedMemberIds.length > 0
+        ? db
+            .select()
+            .from(exchanges)
+            .where(
+              or(
+                inArray(exchanges.providerId, scopedMemberIds),
+                inArray(exchanges.requesterId, scopedMemberIds),
+              )!,
+            )
+            .orderBy(desc(exchanges.createdAt))
+        : Promise.resolve([]),
+      scopedMemberIds.length > 0
+        ? db
+            .select()
+            .from(happenings)
+            .where(inArray(happenings.hostId, scopedMemberIds))
+            .orderBy(asc(happenings.startAt))
+        : Promise.resolve([]),
+      db
+        .select()
+        .from(stewardFlags)
+        .where(eq(stewardFlags.status, 'open'))
+        .orderBy(desc(stewardFlags.createdAt)),
+    ])
+
+    const memberMap = new Map(memberRows.map((row) => [row.id, toMember(row)]))
+    const listingItems = listingRows.map(({ listing, member }) =>
+      toListing(listing, memberMap.get(member.id) ?? toMember(member)),
+    )
+    const listingMap = new Map(listingItems.map((listing) => [listing.id, listing]))
+    const exchangeItems = exchangeRows.map((row) =>
+      toExchange(
+        row,
+        listingMap.get(row.listingId),
+        memberMap.get(row.providerId),
+        memberMap.get(row.requesterId),
+      ),
+    )
+    const happeningItems = happeningRows.map((row) =>
+      toHappening(row, 0, 0, memberMap.get(row.hostId)),
+    )
+
+    const activeListingItems = listingItems.filter(
+      (listing) => listing.isActive && new Date(listing.expiresAt) > now,
+    )
+    const allStaleListings = listingItems.filter(
+      (listing) =>
+        listing.isActive &&
+        (new Date(listing.expiresAt) <= now ||
+          new Date(listing.refreshedAt) <= staleCutoff),
+    )
+    const staleListings = allStaleListings.slice(0, 12)
+    const allStaleHappenings = happeningItems.filter(
+      (happening) => new Date(happening.endAt) < now,
+    )
+    const staleHappenings = allStaleHappenings.slice(0, 8)
+    const allDisputes = exchangeItems.filter(
+      (exchange) => exchange.status === 'disputed',
+    )
+    const disputes = allDisputes.slice(0, 12)
+
+    const needs = activeListingItems.filter((listing) => listing.type === 'need')
+    const offers = activeListingItems.filter((listing) => listing.type === 'offering')
+    const matchAssists = needs
+      .map((need) => {
+        const matches = offers
+          .filter(
+            (offer) =>
+              offer.memberId !== need.memberId &&
+              (offer.category === need.category ||
+                Math.abs(offer.creditPrice - need.creditPrice) <= 3),
+          )
+          .map((offer) => this.scoreStewardMatch(need, offer))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 3)
+
+        return { need, matches }
+      })
+      .filter((assist) => assist.matches.length > 0)
+      .slice(0, 6)
+
+    const resolveFlagTarget = (flag: typeof stewardFlags.$inferSelect) => {
+      if (flag.targetType === 'member') {
+        const member = memberMap.get(flag.targetId)
+        return {
+          label: member ? `${member.firstName} ${member.lastName}` : 'Member',
+          href: `/member/${flag.targetId}`,
+          inScope: !communityId || Boolean(member),
+        }
+      }
+      if (flag.targetType === 'listing') {
+        const listing = listingMap.get(flag.targetId)
+        return {
+          label: listing?.title ?? 'Listing',
+          href: `/listing/${flag.targetId}`,
+          inScope: !communityId || Boolean(listing),
+        }
+      }
+      if (flag.targetType === 'exchange') {
+        const exchange = exchangeItems.find((item) => item.id === flag.targetId)
+        return {
+          label: exchange?.listing?.title
+            ? `Exchange: ${exchange.listing.title}`
+            : 'Exchange',
+          href: `/exchange/${flag.targetId}`,
+          inScope: !communityId || Boolean(exchange),
+        }
+      }
+      const happening = happeningItems.find((item) => item.id === flag.targetId)
+      return {
+        label: happening?.title ?? 'Happening',
+        href: `/happenings/${flag.targetId}`,
+        inScope: !communityId || Boolean(happening),
+      }
+    }
+
+    const openFlags = flagRows
+      .map((flag) => {
+        const target = resolveFlagTarget(flag)
+        if (!target.inScope) return null
+        return toStewardFlag(
+          flag,
+          target.label,
+          target.href,
+          flag.createdById ? memberMap.get(flag.createdById) : undefined,
+        )
+      })
+      .filter((flag): flag is StewardFlag => flag !== null)
+
+    return {
+      currentSteward,
+      community: communityRows[0] ? toCommunity(communityRows[0]) : null,
+      metrics: {
+        activeMembers: memberRows.filter((row) => row.status === 'active').length,
+        pendingMembers: memberRows.filter((row) => row.status === 'pending').length,
+        pausedMembers: memberRows.filter((row) => row.status === 'paused').length,
+        activeNeeds: needs.length,
+        activeOffers: offers.length,
+        activeExchanges: exchangeRows.filter((row) =>
+          ['requested', 'accepted', 'in_escrow'].includes(row.status),
+        ).length,
+        disputedExchanges: allDisputes.length,
+        staleListings: allStaleListings.length,
+        staleHappenings: allStaleHappenings.length,
+        openFlags: openFlags.length,
+        inviteUses: inviteRows.reduce((sum, row) => sum + row.usageCount, 0),
+      },
+      pendingMembers: memberRows
+        .filter((row) => row.status === 'pending')
+        .map(toMember),
+      pausedMembers: memberRows
+        .filter((row) => row.status === 'paused')
+        .map(toMember),
+      invites: inviteRows.map(toCommunityInvite),
+      disputes,
+      staleListings,
+      staleHappenings,
+      matchAssists,
+      openFlags,
+    }
+  }
+
+  async setMemberStatusAsSteward(
+    memberId: string,
+    status: MemberStatus,
+  ): Promise<Member> {
+    const stewardRow = await this.ensureCurrentSteward()
+    if (!['pending', 'active', 'paused'].includes(status)) {
+      throw new Error('Invalid member status')
+    }
+    if (memberId === stewardRow.id && status !== 'active') {
+      throw new Error('A steward cannot pause their own account')
+    }
+
+    const [target] = await db
+      .select()
+      .from(members)
+      .where(eq(members.id, memberId))
+      .limit(1)
+
+    if (!target) throw new Error(`Member ${memberId} not found`)
+    this.assertStewardCommunityScope(stewardRow, target.communityId, 'member')
+
+    const [row] = await db
+      .update(members)
+      .set({
+        status,
+        reviewedAt: status === 'pending' ? null : new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(members.id, memberId))
+      .returning()
+
+    return toMember(row)
+  }
+
+  async archiveListingAsSteward(listingId: string): Promise<Listing> {
+    const stewardRow = await this.ensureCurrentSteward()
+    const [target] = await db
+      .select({ listing: listings, member: members })
+      .from(listings)
+      .innerJoin(members, eq(listings.memberId, members.id))
+      .where(eq(listings.id, listingId))
+      .limit(1)
+
+    if (!target) throw new Error(`Listing ${listingId} not found`)
+    this.assertStewardCommunityScope(stewardRow, target.member.communityId, 'listing')
+
+    const [row] = await db
+      .update(listings)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(listings.id, listingId))
+      .returning()
+
+    return toListing(row, toMember(target.member))
+  }
+
+  async refreshListingAsSteward(listingId: string): Promise<Listing> {
+    const stewardRow = await this.ensureCurrentSteward()
+    const [target] = await db
+      .select({ listing: listings, member: members })
+      .from(listings)
+      .innerJoin(members, eq(listings.memberId, members.id))
+      .where(eq(listings.id, listingId))
+      .limit(1)
+
+    if (!target) throw new Error(`Listing ${listingId} not found`)
+    this.assertStewardCommunityScope(stewardRow, target.member.communityId, 'listing')
+
+    const now = new Date()
+    const [row] = await db
+      .update(listings)
+      .set({
+        isActive: true,
+        refreshedAt: now,
+        expiresAt: getListingExpiresAt(now),
+        updatedAt: now,
+      })
+      .where(eq(listings.id, listingId))
+      .returning()
+
+    return toListing(row, toMember(target.member))
+  }
+
+  async deletePastHappeningAsSteward(happeningId: string): Promise<void> {
+    const stewardRow = await this.ensureCurrentSteward()
+    const [target] = await db
+      .select({ happening: happenings, host: members })
+      .from(happenings)
+      .innerJoin(members, eq(happenings.hostId, members.id))
+      .where(eq(happenings.id, happeningId))
+      .limit(1)
+
+    if (!target) throw new Error(`Happening ${happeningId} not found`)
+    this.assertStewardCommunityScope(stewardRow, target.host.communityId, 'happening')
+    if (target.happening.endAt > new Date()) {
+      throw new Error('Only past happenings can be removed from the cleanup queue')
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(happeningRsvps)
+        .where(eq(happeningRsvps.happeningId, happeningId))
+      await tx.delete(happenings).where(eq(happenings.id, happeningId))
+    })
+  }
+
+  async createStewardFlagAsSteward(
+    targetType: StewardFlagTarget,
+    targetId: string,
+    reason: string,
+  ): Promise<StewardFlag> {
+    const stewardRow = await this.ensureCurrentSteward()
+    const trimmedReason = reason.trim()
+    if (trimmedReason.length < 3) throw new Error('Flag reason is required')
+
+    const [row] = await db
+      .insert(stewardFlags)
+      .values({
+        targetType,
+        targetId,
+        reason: trimmedReason,
+        createdById: stewardRow.id,
+      })
+      .returning()
+
+    return toStewardFlag(row, targetType, null, toMember(stewardRow))
+  }
+
+  async resolveStewardFlag(flagId: string): Promise<StewardFlag> {
+    const stewardRow = await this.ensureCurrentSteward()
+    const [existing] = await db
+      .select()
+      .from(stewardFlags)
+      .where(eq(stewardFlags.id, flagId))
+      .limit(1)
+
+    if (!existing) throw new Error(`Flag ${flagId} not found`)
+    if (existing.status === 'resolved') {
+      return toStewardFlag(existing, existing.targetType, null)
+    }
+
+    const [row] = await db
+      .update(stewardFlags)
+      .set({
+        status: 'resolved',
+        resolvedById: stewardRow.id,
+        resolvedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(stewardFlags.id, flagId))
+      .returning()
+
+    return toStewardFlag(row, row.targetType, null, toMember(stewardRow))
+  }
+
+  async resolveDisputeAsSteward(
+    exchangeId: string,
+    outcome: 'refund' | 'release',
+  ): Promise<Exchange> {
+    const stewardRow = await this.ensureCurrentSteward()
+    if (!['refund', 'release'].includes(outcome)) {
+      throw new Error('Invalid dispute outcome')
+    }
+
+    const [exchangeRow] = await db
+      .select()
+      .from(exchanges)
+      .where(eq(exchanges.id, exchangeId))
+      .limit(1)
+
+    if (!exchangeRow) throw new Error(`Exchange ${exchangeId} not found`)
+
+    const participantRows = await db
+      .select()
+      .from(members)
+      .where(inArray(members.id, [exchangeRow.providerId, exchangeRow.requesterId]))
+    if (stewardRow.communityId) {
+      const isInScope = participantRows.some(
+        (participant) => participant.communityId === stewardRow.communityId,
+      )
+      if (!isInScope) throw new Error('Not authorized to manage this exchange')
+    }
+
+    if (exchangeRow.status === 'completed' || exchangeRow.status === 'cancelled') {
+      return toExchange(exchangeRow)
+    }
+    if (exchangeRow.status !== 'disputed') {
+      throw new Error(`Cannot resolve an exchange with status '${exchangeRow.status}'`)
+    }
+
+    return await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(exchanges)
+        .set({
+          status: outcome === 'release' ? 'completed' : 'cancelled',
+          completedAt: outcome === 'release' ? new Date() : null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(exchanges.id, exchangeId), eq(exchanges.status, 'disputed')))
+        .returning()
+
+      if (!updated) {
+        const [current] = await tx
+          .select()
+          .from(exchanges)
+          .where(eq(exchanges.id, exchangeId))
+          .limit(1)
+        if (current?.status === 'completed' || current?.status === 'cancelled') {
+          return toExchange(current)
+        }
+        throw new Error(`Cannot resolve an exchange with status '${current?.status}'`)
+      }
+
+      const [providerWallet] = await tx
+        .select()
+        .from(wallets)
+        .where(eq(wallets.memberId, exchangeRow.providerId))
+        .limit(1)
+      const [requesterWallet] = await tx
+        .select()
+        .from(wallets)
+        .where(eq(wallets.memberId, exchangeRow.requesterId))
+        .limit(1)
+
+      if (!requesterWallet) {
+        throw new Error(`Wallet not found for requester ${exchangeRow.requesterId}`)
+      }
+
+      const [hold] = await tx
+        .select()
+        .from(walletTransactions)
+        .where(
+          and(
+            eq(walletTransactions.exchangeId, exchangeId),
+            eq(walletTransactions.walletId, requesterWallet.id),
+            eq(walletTransactions.type, 'escrow_hold'),
+          ),
+        )
+        .limit(1)
+
+      if (outcome === 'release') {
+        if (!providerWallet) {
+          throw new Error(`Wallet not found for provider ${exchangeRow.providerId}`)
+        }
+        if (!hold) throw new Error('Cannot release credits without an escrow hold')
+
+        await this.applyLedgerOperation(tx, {
+          walletId: providerWallet.id,
+          type: 'escrow_release',
+          amount: exchangeRow.tuAmount,
+          description: 'Credits released by steward dispute resolution',
+          exchangeId,
+          operationKey: this.ledgerOperationKey(exchangeId, providerWallet.id, 'release'),
+        })
+        await this.applyLedgerOperation(tx, {
+          walletId: requesterWallet.id,
+          type: 'spent',
+          amount: exchangeRow.tuAmount,
+          description: 'Held credits spent after steward dispute resolution',
+          exchangeId,
+          operationKey: this.ledgerOperationKey(exchangeId, requesterWallet.id, 'spent'),
+        })
+      }
+
+      if (outcome === 'refund' && hold) {
+        await this.applyLedgerOperation(tx, {
+          walletId: requesterWallet.id,
+          type: 'escrow_return',
+          amount: exchangeRow.tuAmount,
+          description: 'Held credits returned by steward dispute resolution',
+          exchangeId,
+          operationKey: this.ledgerOperationKey(exchangeId, requesterWallet.id, 'return'),
+        })
+      }
+
+      return toExchange(updated)
+    })
+  }
+
   // ---- Membership tiers (static) ------------------------------------------
 
   getMembershipTiers(): MembershipTierInfo[] {
@@ -1857,6 +2404,62 @@ export class ExchangeEngineClient {
   }
 
   // ---- Private helpers ----------------------------------------------------
+
+  private async ensureCurrentSteward(): Promise<typeof members.$inferSelect> {
+    if (!this.currentMemberId) await this.initialize()
+
+    const [row] = await db
+      .select()
+      .from(members)
+      .where(eq(members.id, this.currentMemberId))
+      .limit(1)
+
+    if (!row) throw new Error(`Member ${this.currentMemberId} not found`)
+    if (!row.isSteward) throw new Error('Steward access required')
+
+    return row
+  }
+
+  private assertStewardCommunityScope(
+    stewardRow: typeof members.$inferSelect,
+    targetCommunityId: string | null,
+    targetName: string,
+  ): void {
+    if (stewardRow.communityId && targetCommunityId !== stewardRow.communityId) {
+      throw new Error(`Not authorized to manage this ${targetName}`)
+    }
+  }
+
+  private scoreStewardMatch(
+    need: Listing,
+    offer: Listing,
+  ): SuggestedListingMatch {
+    const reasons: string[] = []
+    let score = 0
+
+    if (need.category === offer.category) {
+      score += 45
+      reasons.push('Same category')
+    }
+    if (need.member?.communityId && offer.member?.communityId === need.member.communityId) {
+      score += 25
+      reasons.push('Same community')
+    }
+    if (
+      need.creditPrice === 0 ||
+      offer.creditPrice === 0 ||
+      Math.abs(offer.creditPrice - need.creditPrice) <= 3
+    ) {
+      score += 20
+      reasons.push('Compatible credits')
+    }
+    if (offer.member?.isAvailable) {
+      score += 10
+      reasons.push('Member available')
+    }
+
+    return { listing: offer, score, reasons }
+  }
 
   private assertExchangeParticipant(row: typeof exchanges.$inferSelect): void {
     if (

@@ -16,6 +16,7 @@ import {
   Circle,
   Sparkles,
   LogOut,
+  ShieldCheck,
 } from 'lucide-react'
 import type { OnboardingProgress } from '@/lib/exchange-engine'
 import { signOutAction } from '@/app/(auth)/actions'
@@ -179,6 +180,31 @@ export default async function MyProfilePage() {
           balance={wallet.balance}
           monthlyEarned={wallet.monthlyEarned}
         />
+
+        {member.isSteward && (
+          <Card>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
+                  <ShieldCheck size={17} className="text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-heading">
+                    Steward Console
+                  </h2>
+                  <p className="text-xs text-secondary">
+                    Review members, disputes, stale content, and matches.
+                  </p>
+                </div>
+              </div>
+              <Link href="/steward">
+                <Button variant="secondary" size="sm">
+                  Open
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        )}
 
         {/* ─── Your Trail (if incomplete) ─── */}
         {onboarding.length > 0 && <YourTrail steps={onboarding} />}

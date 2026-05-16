@@ -15,6 +15,7 @@ import { reviews, reputationTags } from './reviews'
 import { happenings, happeningRsvps } from './happenings'
 import { onboardingProgress } from './onboarding'
 import { conversations, conversationParticipants, messages } from './messages'
+import { stewardFlags } from './steward-flags'
 
 // ── Members ────────────────────────────────────────────────────────────
 export const membersRelations = relations(members, ({ one, many }) => ({
@@ -37,10 +38,26 @@ export const membersRelations = relations(members, ({ one, many }) => ({
   availabilitySlots: many(availabilitySlots),
   conversationParticipants: many(conversationParticipants),
   messagesSent: many(messages),
+  stewardFlagsCreated: many(stewardFlags, { relationName: 'flagCreator' }),
+  stewardFlagsResolved: many(stewardFlags, { relationName: 'flagResolver' }),
   authAccount: one(authAccounts),
   community: one(communities, {
     fields: [members.communityId],
     references: [communities.id],
+  }),
+}))
+
+// -- Steward flags ----------------------------------------------------------
+export const stewardFlagsRelations = relations(stewardFlags, ({ one }) => ({
+  createdBy: one(members, {
+    fields: [stewardFlags.createdById],
+    references: [members.id],
+    relationName: 'flagCreator',
+  }),
+  resolvedBy: one(members, {
+    fields: [stewardFlags.resolvedById],
+    references: [members.id],
+    relationName: 'flagResolver',
   }),
 }))
 

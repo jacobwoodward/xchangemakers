@@ -7,6 +7,12 @@ export const membershipTypeEnum = pgEnum('membership_type', [
   'community_contribution',
 ])
 
+export const memberStatusEnum = pgEnum('member_status', [
+  'pending',
+  'active',
+  'paused',
+])
+
 export const members = pgTable('members', {
   id: uuid('id').primaryKey().defaultRandom(),
   firstName: varchar('first_name', { length: 255 }).notNull(),
@@ -22,6 +28,9 @@ export const members = pgTable('members', {
   isAvailable: boolean('is_available').default(true).notNull(),
   availabilityNote: varchar('availability_note', { length: 255 }),
   membershipType: membershipTypeEnum('membership_type').default('standard').notNull(),
+  status: memberStatusEnum('status').default('active').notNull(),
+  isSteward: boolean('is_steward').default(false).notNull(),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
   joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),

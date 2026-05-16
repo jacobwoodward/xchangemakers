@@ -81,6 +81,7 @@ async function run() {
 
   console.log('Seeding data...');
   await seedData();
+  await ensurePhase5StewardshipColumns();
   await seedCommunities();
   await seedAuthAccounts();
   console.log('Seed complete');
@@ -146,6 +147,7 @@ async function migrate() {
   await ensureAuthTables();
   await ensureListingLifecycleColumns();
   await ensurePhase4ExchangeRoomColumns();
+  await ensurePhase5StewardshipColumns();
 }
 
 async function ensureCommunityTables() {
@@ -322,11 +324,74 @@ async function ensurePhase4ExchangeRoomColumns() {
   `);
 }
 
+async function ensurePhase5StewardshipColumns() {
+  const membersTable = await sql`
+    SELECT count(*)::int as c FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'members'
+  `;
+
+  if (membersTable[0].c === 0) return;
+
+  await sql.unsafe(`
+    DO $$ BEGIN
+      CREATE TYPE member_status AS ENUM ('pending', 'active', 'paused');
+    EXCEPTION WHEN duplicate_object THEN null; END $$;
+    DO $$ BEGIN
+      CREATE TYPE steward_flag_target AS ENUM ('member', 'listing', 'exchange', 'happening');
+    EXCEPTION WHEN duplicate_object THEN null; END $$;
+    DO $$ BEGIN
+      CREATE TYPE steward_flag_status AS ENUM ('open', 'resolved');
+    EXCEPTION WHEN duplicate_object THEN null; END $$;
+
+    ALTER TABLE members
+      ADD COLUMN IF NOT EXISTS status member_status,
+      ADD COLUMN IF NOT EXISTS is_steward boolean,
+      ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
+
+    UPDATE members
+    SET status = COALESCE(status, 'active'::member_status),
+        is_steward = COALESCE(is_steward, false);
+
+    UPDATE members
+    SET is_steward = true,
+        status = 'active',
+        reviewed_at = COALESCE(reviewed_at, now())
+    WHERE id = 'a0000000-0000-4000-8000-000000000001'
+       OR lower(email) IN ('lauren@example.com', 'lauren.chen@email.com');
+
+    ALTER TABLE members
+      ALTER COLUMN status SET DEFAULT 'active',
+      ALTER COLUMN status SET NOT NULL,
+      ALTER COLUMN is_steward SET DEFAULT false,
+      ALTER COLUMN is_steward SET NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS steward_flags (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      target_type steward_flag_target NOT NULL,
+      target_id uuid NOT NULL,
+      reason text NOT NULL,
+      status steward_flag_status NOT NULL DEFAULT 'open',
+      created_by_id uuid REFERENCES members(id),
+      resolved_by_id uuid REFERENCES members(id),
+      resolved_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS steward_flags_status_idx ON steward_flags(status);
+    CREATE INDEX IF NOT EXISTS steward_flags_target_idx ON steward_flags(target_type, target_id);
+    CREATE INDEX IF NOT EXISTS steward_flags_created_by_idx ON steward_flags(created_by_id);
+  `);
+}
+
 async function createSchema() {
   // Create enums
   await sql.unsafe(`
     DO $$ BEGIN
       CREATE TYPE membership_type AS ENUM ('standard', 'business', 'community_contribution');
+    EXCEPTION WHEN duplicate_object THEN null; END $$;
+    DO $$ BEGIN
+      CREATE TYPE member_status AS ENUM ('pending', 'active', 'paused');
     EXCEPTION WHEN duplicate_object THEN null; END $$;
     DO $$ BEGIN
       CREATE TYPE transaction_type AS ENUM ('earned', 'spent', 'escrow_hold', 'escrow_release', 'escrow_return');
@@ -363,6 +428,12 @@ async function createSchema() {
     EXCEPTION WHEN duplicate_object THEN null; END $$;
     DO $$ BEGIN
       CREATE TYPE onboarding_step AS ENUM ('profile_photo', 'intro_vibe', 'add_offerings', 'post_need', 'rsvp_happening', 'first_exchange', 'first_review', 'invite_neighbor');
+    EXCEPTION WHEN duplicate_object THEN null; END $$;
+    DO $$ BEGIN
+      CREATE TYPE steward_flag_target AS ENUM ('member', 'listing', 'exchange', 'happening');
+    EXCEPTION WHEN duplicate_object THEN null; END $$;
+    DO $$ BEGIN
+      CREATE TYPE steward_flag_status AS ENUM ('open', 'resolved');
     EXCEPTION WHEN duplicate_object THEN null; END $$;
   `);
 
@@ -411,6 +482,9 @@ async function createSchema() {
       is_available boolean NOT NULL DEFAULT true,
       availability_note varchar(500),
       membership_type membership_type NOT NULL DEFAULT 'standard',
+      status member_status NOT NULL DEFAULT 'active',
+      is_steward boolean NOT NULL DEFAULT false,
+      reviewed_at timestamptz,
       joined_at timestamptz NOT NULL DEFAULT now(),
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
@@ -585,6 +659,23 @@ async function createSchema() {
       completed_at timestamptz,
       created_at timestamptz NOT NULL DEFAULT now()
     );
+
+    CREATE TABLE IF NOT EXISTS steward_flags (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      target_type steward_flag_target NOT NULL,
+      target_id uuid NOT NULL,
+      reason text NOT NULL,
+      status steward_flag_status NOT NULL DEFAULT 'open',
+      created_by_id uuid REFERENCES members(id),
+      resolved_by_id uuid REFERENCES members(id),
+      resolved_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS steward_flags_status_idx ON steward_flags(status);
+    CREATE INDEX IF NOT EXISTS steward_flags_target_idx ON steward_flags(target_type, target_id);
+    CREATE INDEX IF NOT EXISTS steward_flags_created_by_idx ON steward_flags(created_by_id);
   `);
 }
 

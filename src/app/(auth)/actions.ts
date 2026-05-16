@@ -214,6 +214,7 @@ export async function signUpAction(
         latitude: resolvedCommunity.community.latitude,
         longitude: resolvedCommunity.community.longitude,
         membershipType,
+        status: 'pending',
       })
       .returning()
 

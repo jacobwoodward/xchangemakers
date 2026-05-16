@@ -10,6 +10,8 @@
 
 export type MembershipType = 'standard' | 'business' | 'community_contribution'
 
+export type MemberStatus = 'pending' | 'active' | 'paused'
+
 export type ListingType = 'offering' | 'need'
 
 export type ListingCategory =
@@ -83,6 +85,10 @@ export type OnboardingStep =
 
 export type AvailabilityType = 'ongoing' | 'one_time' | 'event_only'
 
+export type StewardFlagTarget = 'member' | 'listing' | 'exchange' | 'happening'
+
+export type StewardFlagStatus = 'open' | 'resolved'
+
 // ---- Core types -----------------------------------------------------------
 
 /**
@@ -104,7 +110,36 @@ export interface Member {
   isAvailable: boolean
   availabilityNote: string | null
   membershipType: MembershipType
+  status: MemberStatus
+  isSteward: boolean
+  reviewedAt: string | null
   joinedAt: string
+}
+
+/** Local community used for membership, invites, and stewardship scope. */
+export interface Community {
+  id: string
+  name: string
+  slug: string
+  city: string
+  region: string
+  postalCode: string | null
+  status: string
+  inviteOnly: boolean
+}
+
+/** Invite code and usage limits for a community. */
+export interface CommunityInvite {
+  id: string
+  communityId: string
+  code: string
+  label: string
+  maxUses: number | null
+  usageCount: number
+  expiresAt: string | null
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
 }
 
 /**
@@ -221,6 +256,56 @@ export interface ExchangeRoom {
     dispute: boolean
     review: boolean
   }
+}
+
+/** Shared queue item for steward review. */
+export interface StewardFlag {
+  id: string
+  targetType: StewardFlagTarget
+  targetId: string
+  targetLabel: string
+  targetHref: string | null
+  reason: string
+  status: StewardFlagStatus
+  createdById: string | null
+  createdBy?: Member
+  resolvedById: string | null
+  resolvedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** A need and the nearby offers a steward can use to seed a match. */
+export interface StewardMatchAssist {
+  need: Listing
+  matches: SuggestedListingMatch[]
+}
+
+/** Operator view for keeping one community trusted, active, and current. */
+export interface StewardDashboard {
+  currentSteward: Member
+  community: Community | null
+  metrics: {
+    activeMembers: number
+    pendingMembers: number
+    pausedMembers: number
+    activeNeeds: number
+    activeOffers: number
+    activeExchanges: number
+    disputedExchanges: number
+    staleListings: number
+    staleHappenings: number
+    openFlags: number
+    inviteUses: number
+  }
+  pendingMembers: Member[]
+  pausedMembers: Member[]
+  invites: CommunityInvite[]
+  disputes: Exchange[]
+  staleListings: Listing[]
+  staleHappenings: Happening[]
+  matchAssists: StewardMatchAssist[]
+  openFlags: StewardFlag[]
 }
 
 /** A recurring or one-time time slot when a member is available. */

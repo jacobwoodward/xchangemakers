@@ -6,6 +6,7 @@
  * Usage: npm run db:seed   (which runs: tsx src/db/seed.ts)
  */
 import { drizzle } from 'drizzle-orm/postgres-js'
+import { eq } from 'drizzle-orm'
 import postgres from 'postgres'
 import * as schema from './schema'
 
@@ -184,6 +185,7 @@ async function seed() {
   console.log('Clearing existing data...')
 
   // Delete in reverse dependency order
+  await db.delete(schema.stewardFlags)
   await db.delete(schema.reputationTags)
   await db.delete(schema.reviews)
   await db.delete(schema.onboardingProgress)
@@ -497,6 +499,15 @@ async function seed() {
       joinedAt: daysAgo(3),
     },
   ])
+
+  await db
+    .update(schema.members)
+    .set({
+      status: 'active',
+      isSteward: true,
+      reviewedAt: daysAgo(45),
+    })
+    .where(eq(schema.members.id, LAUREN_ID))
 
   console.log('  18 members inserted.')
 
