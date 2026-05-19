@@ -51,3 +51,8 @@ pgdata/
 # local browser smoke artifacts
 test-results/
 playwright-report/
+
+# local agent/dev artifacts
+.claude/
+.codex-screenshots/
+codex-dev-server.*

@@ -16,6 +16,11 @@ import { happenings, happeningRsvps } from './happenings'
 import { onboardingProgress } from './onboarding'
 import { conversations, conversationParticipants, messages } from './messages'
 import { stewardFlags } from './steward-flags'
+import { helperPreferences, needOffers, needWindows } from './timed-needs'
+import { businessProfiles } from './business-profiles'
+import { notifications } from './notifications'
+import { analyticsEvents } from './analytics-events'
+import { memberIntentProfiles } from './member-intent-profiles'
 
 // ── Members ────────────────────────────────────────────────────────────
 export const membersRelations = relations(members, ({ one, many }) => ({
@@ -36,6 +41,21 @@ export const membersRelations = relations(members, ({ one, many }) => ({
   happeningRsvps: many(happeningRsvps),
   onboardingProgress: many(onboardingProgress),
   availabilitySlots: many(availabilitySlots),
+  helperPreferences: one(helperPreferences, {
+    fields: [members.id],
+    references: [helperPreferences.memberId],
+  }),
+  intentProfile: one(memberIntentProfiles, {
+    fields: [members.id],
+    references: [memberIntentProfiles.memberId],
+  }),
+  businessProfile: one(businessProfiles, {
+    fields: [members.id],
+    references: [businessProfiles.memberId],
+  }),
+  notifications: many(notifications),
+  analyticsEvents: many(analyticsEvents),
+  needOffers: many(needOffers),
   conversationParticipants: many(conversationParticipants),
   messagesSent: many(messages),
   stewardFlagsCreated: many(stewardFlags, { relationName: 'flagCreator' }),
@@ -101,6 +121,8 @@ export const listingsRelations = relations(listings, ({ one, many }) => ({
     references: [members.id],
   }),
   exchanges: many(exchanges),
+  needWindows: many(needWindows),
+  needOffers: many(needOffers),
 }))
 
 // ── Exchanges ──────────────────────────────────────────────────────────

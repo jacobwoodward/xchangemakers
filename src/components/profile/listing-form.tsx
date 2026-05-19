@@ -2,7 +2,14 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertCircle, Clock } from 'lucide-react'
+import {
+  AlertCircle,
+  CalendarClock,
+  Clock,
+  MapPin,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { Card, Button, Badge } from '@/components/ui'
 import { cn } from '@/lib/utils'
 import type {
@@ -80,6 +87,53 @@ const CREDIT_SUGGESTIONS: Record<
   ],
 }
 
+function toDateTimeInputValue(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+type NeedWindowFormState = {
+  id: string
+  sourceId?: string | null
+  startsAt: string
+  endsAt: string
+  label: string
+  isFlexible: boolean
+}
+
+function createWindowId(): string {
+  return `window-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function normalizeDateTimeInputValue(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return toDateTimeInputValue(date)
+}
+
+function getDefaultNeedWindow(index = 0): NeedWindowFormState {
+  const startsAt = new Date()
+  startsAt.setDate(startsAt.getDate() + 1 + index)
+  startsAt.setHours(index === 0 ? 14 : 10, 0, 0, 0)
+
+  const endsAt = new Date(startsAt)
+  endsAt.setHours(startsAt.getHours() + 2, 0, 0, 0)
+
+  return {
+    id: createWindowId(),
+    startsAt: toDateTimeInputValue(startsAt),
+    endsAt: toDateTimeInputValue(endsAt),
+    label: index === 0 ? 'Preferred window' : 'Backup window',
+    isFlexible: index > 0,
+  }
+}
+
 export interface ListingFormProps {
   mode: 'create' | 'edit'
   initialValues?: Partial<CreateListingInput>
@@ -109,10 +163,68 @@ export function ListingForm({
   const [availabilityType, setAvailabilityType] = useState<AvailabilityType>(
     initialValues?.availabilityType ?? 'ongoing',
   )
+  const [needWindows, setNeedWindows] = useState<NeedWindowFormState[]>(() => {
+    if (initialValues?.windows && initialValues.windows.length > 0) {
+      return initialValues.windows.map((window, index) => ({
+        id: `initial-${index}-${window.startsAt}`,
+        sourceId: window.id ?? null,
+        startsAt: normalizeDateTimeInputValue(window.startsAt),
+        endsAt: normalizeDateTimeInputValue(window.endsAt),
+        label: window.label ?? (index === 0 ? 'Preferred window' : 'Backup window'),
+        isFlexible: Boolean(window.isFlexible),
+      }))
+    }
+    return [getDefaultNeedWindow()]
+  })
+  const [publicLocationLabel, setPublicLocationLabel] = useState(
+    initialValues?.publicLocationLabel ?? '',
+  )
+  const [isUrgent, setIsUrgent] = useState(initialValues?.isUrgent ?? false)
+  const [recurringNote, setRecurringNote] = useState(
+    initialValues?.recurringNote ?? '',
+  )
   const guidance = LISTING_FORM_GUIDANCE[type]
   const creditSuggestions = CREDIT_SUGGESTIONS[type]
 
-  const canSubmit = title.trim().length > 0 && description.trim().length > 0 && !isPending
+  const hasValidNeedWindow =
+    type !== 'need' ||
+    (needWindows.length > 0 &&
+      needWindows.every(
+        (window) =>
+          window.startsAt.length > 0 &&
+          window.endsAt.length > 0 &&
+          new Date(window.endsAt) > new Date(window.startsAt),
+      ))
+
+  const canSubmit =
+    title.trim().length > 0 &&
+    description.trim().length > 0 &&
+    hasValidNeedWindow &&
+    !isPending
+
+  const updateNeedWindow = (
+    id: string,
+    patch: Partial<Omit<NeedWindowFormState, 'id'>>,
+  ) => {
+    setNeedWindows((windows) =>
+      windows.map((window) =>
+        window.id === id ? { ...window, ...patch } : window,
+      ),
+    )
+  }
+
+  const addNeedWindow = () => {
+    setNeedWindows((windows) => [
+      ...windows,
+      getDefaultNeedWindow(windows.length),
+    ])
+  }
+
+  const removeNeedWindow = (id: string) => {
+    setNeedWindows((windows) =>
+      windows.length > 1 ? windows.filter((window) => window.id !== id) : windows,
+    )
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -125,6 +237,30 @@ export function ListingForm({
       category,
       creditPrice,
       availabilityType,
+      publicLocationLabel:
+        type === 'need' && publicLocationLabel.trim().length > 0
+          ? publicLocationLabel.trim()
+          : null,
+      isUrgent: type === 'need' ? isUrgent : false,
+      recurringNote:
+        type === 'need' && recurringNote.trim().length > 0
+          ? recurringNote.trim()
+          : null,
+      windows:
+        type === 'need'
+          ? needWindows.map((window, index) => ({
+              id: window.sourceId ?? null,
+              startsAt: window.startsAt,
+              endsAt: window.endsAt,
+              label:
+                window.label.trim().length > 0
+                  ? window.label.trim()
+                  : index === 0
+                    ? 'Preferred window'
+                    : 'Backup window',
+              isFlexible: window.isFlexible,
+            }))
+          : undefined,
     }
 
     startTransition(async () => {
@@ -137,9 +273,11 @@ export function ListingForm({
         setError(result.error)
         return
       }
+      const createTarget =
+        type === 'need' ? `/needs?posted=${result.id}` : `/listing/${result.id}/matches`
       router.push(
         mode === 'create' && result.id
-          ? `/listing/${result.id}/matches`
+          ? createTarget
           : '/profile',
       )
       router.refresh()
@@ -241,6 +379,205 @@ export function ListingForm({
           />
         </label>
       </Card>
+
+      {type === 'need' && (
+        <Card className="space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <CalendarClock size={16} className="text-primary" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">
+                  Timing
+                </h3>
+              </div>
+              <p className="text-xs leading-relaxed text-muted">
+                Add every window that could work so helpers can offer the slot
+                that fits them.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={addNeedWindow}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
+            >
+              <Plus size={14} />
+              Add time
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {needWindows.map((window, index) => {
+              const isInvalid =
+                window.startsAt.length > 0 &&
+                window.endsAt.length > 0 &&
+                new Date(window.endsAt) <= new Date(window.startsAt)
+
+              return (
+                <div
+                  key={window.id}
+                  className="rounded-lg border border-border-light bg-hover/40 p-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                      Window {index + 1}
+                    </p>
+                    {needWindows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeNeedWindow(window.id)}
+                        className="rounded-full p-1.5 text-muted transition-colors hover:bg-surface hover:text-error"
+                        aria-label={`Remove window ${index + 1}`}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
+
+                  <label className="mt-2 block">
+                    <span className="text-xs font-semibold text-muted">
+                      Label
+                    </span>
+                    <input
+                      type="text"
+                      value={window.label}
+                      onChange={(e) =>
+                        updateNeedWindow(window.id, { label: e.target.value })
+                      }
+                      maxLength={80}
+                      placeholder={
+                        index === 0 ? 'Preferred window' : 'Backup window'
+                      }
+                      className="mt-1.5 w-full rounded-lg border border-border-light bg-surface px-3 py-2.5 text-sm text-body placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </label>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="text-xs font-semibold text-muted">
+                        Starts
+                      </span>
+                      <input
+                        type="datetime-local"
+                        value={window.startsAt}
+                        onChange={(e) =>
+                          updateNeedWindow(window.id, {
+                            startsAt: e.target.value,
+                          })
+                        }
+                        className="mt-1.5 w-full rounded-lg border border-border-light bg-surface px-3 py-2.5 text-sm text-body focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-muted">
+                        Ends
+                      </span>
+                      <input
+                        type="datetime-local"
+                        value={window.endsAt}
+                        onChange={(e) =>
+                          updateNeedWindow(window.id, {
+                            endsAt: e.target.value,
+                          })
+                        }
+                        className="mt-1.5 w-full rounded-lg border border-border-light bg-surface px-3 py-2.5 text-sm text-body focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-border-light bg-surface px-3 py-2.5">
+                    <div>
+                      <p className="text-sm font-semibold text-heading">
+                        Flexible window
+                      </p>
+                      <p className="text-xs text-muted">
+                        Helpers can suggest a nearby time.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={window.isFlexible}
+                      onChange={(e) =>
+                        updateNeedWindow(window.id, {
+                          isFlexible: e.target.checked,
+                        })
+                      }
+                      className="h-5 w-5 rounded border-border text-primary"
+                    />
+                  </label>
+
+                  {isInvalid && (
+                    <p className="mt-2 text-xs font-medium text-error">
+                      End time must be after start time.
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {!hasValidNeedWindow && (
+            <p className="text-xs font-medium text-error">
+              Every need needs at least one valid time window.
+            </p>
+          )}
+
+          <label className="flex items-center justify-between gap-3 rounded-lg border border-border-light px-3 py-2.5">
+            <div>
+              <p className="text-sm font-semibold text-heading">
+                Needs help right now
+              </p>
+              <p className="text-xs text-muted">
+                Prioritize this in the urgent lane.
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={isUrgent}
+              onChange={(e) => setIsUrgent(e.target.checked)}
+              className="h-5 w-5 rounded border-border text-primary"
+            />
+          </label>
+        </Card>
+      )}
+
+      {type === 'need' && (
+        <Card className="space-y-4">
+          <div>
+            <label className="block">
+              <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted">
+                <MapPin size={14} />
+                Public location
+              </span>
+              <input
+                type="text"
+                value={publicLocationLabel}
+                onChange={(e) => setPublicLocationLabel(e.target.value)}
+                maxLength={255}
+                placeholder="e.g. Green Leaf Park area or Friendswood west side"
+                className="mt-1.5 w-full rounded-lg border border-border-light bg-surface px-3 py-2.5 text-sm text-body placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </label>
+            <p className="mt-2 text-xs leading-relaxed text-muted">
+              Helpers see the general area first. Exact addresses stay private
+              until you accept someone.
+            </p>
+          </div>
+
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted">
+              Recurring or backup notes
+            </span>
+            <textarea
+              value={recurringNote}
+              onChange={(e) => setRecurringNote(e.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder="e.g. Could become weekly, or backup times are okay if needed."
+              className="mt-1.5 w-full rounded-lg border border-border-light bg-surface px-3 py-2.5 text-sm text-body placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 resize-y"
+            />
+          </label>
+        </Card>
+      )}
 
       {/* Category */}
       <Card>
@@ -375,7 +712,11 @@ export function ListingForm({
           disabled={!canSubmit}
           isLoading={isPending}
         >
-          {mode === 'create' ? 'Post and match' : 'Save'}
+          {mode === 'create'
+            ? type === 'need'
+              ? 'Post need'
+              : 'Post and match'
+            : 'Save'}
         </Button>
       </div>
     </form>

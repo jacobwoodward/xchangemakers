@@ -7,15 +7,41 @@ const databaseUrl =
   process.env.DATABASE_URL ??
   'postgresql://xchangemakers:xchangemakers@localhost:5433/xchangemakers'
 
-test.use({ channel: 'chrome' })
+test.use({ channel: 'msedge' })
 
 async function cleanupListing(title: string) {
   const sql = postgres(databaseUrl, { max: 1 })
 
   try {
+    const listings = await sql<{ id: string }[]>`
+      SELECT id
+      FROM listings
+      WHERE title = ${title}
+    `
+    const listingIds = listings.map((listing) => listing.id)
+    if (listingIds.length === 0) return
+
+    await sql`
+      DELETE FROM analytics_events
+      WHERE target_id IN ${sql(listingIds)}
+    `
+    for (const listingId of listingIds) {
+      await sql`
+        DELETE FROM notifications
+        WHERE target_path LIKE ${`%${listingId}%`}
+      `
+    }
+    await sql`
+      DELETE FROM need_offers
+      WHERE need_id IN ${sql(listingIds)}
+    `
+    await sql`
+      DELETE FROM need_windows
+      WHERE need_id IN ${sql(listingIds)}
+    `
     await sql`
       DELETE FROM listings
-      WHERE title = ${title}
+      WHERE id IN ${sql(listingIds)}
     `
   } finally {
     await sql.end()
@@ -75,6 +101,28 @@ async function createListingForMember({
       )
       RETURNING id
     `
+
+    if (type === 'need') {
+      await sql`
+        INSERT INTO need_windows (
+          need_id,
+          starts_at,
+          ends_at,
+          label,
+          is_flexible,
+          status
+        )
+        VALUES (
+          ${listing.id},
+          now() + interval '2 days',
+          now() + interval '2 days 2 hours',
+          'Smoke window',
+          false,
+          'open'
+        )
+      `
+    }
+
     return listing.id
   } finally {
     await sql.end()
@@ -83,7 +131,7 @@ async function createListingForMember({
 
 async function signIn(page: Page) {
   await page.goto(`${baseUrl}/sign-in`)
-  await page.getByLabel('Email').fill('lauren@example.com')
+  await page.getByLabel('Email').fill('lauren.chen@email.com')
   await page.getByLabel('Password').fill('password')
   await page.getByRole('button', { name: /Sign In/i }).click()
   await page.waitForURL(`${baseUrl}/`)
@@ -92,9 +140,9 @@ async function signIn(page: Page) {
 test('filters needs and offers boards', async ({ page }) => {
   await signIn(page)
 
-  await page.goto(`${baseUrl}/needs?category=food&distance=all`)
-  await expect(page.getByRole('heading', { name: 'Help someone nearby' })).toBeVisible()
-  await expect(page.getByText('Looking for homemade birthday cake')).toBeVisible()
+  await page.goto(`${baseUrl}/needs?category=food&distance=all&timeframe=month`)
+  await expect(page.getByRole('heading', { name: 'Help timed needs nearby' })).toBeVisible()
+  await expect(page.getByText('Looking for Homemade Birthday Cake')).toBeVisible()
 
   await page.goto(`${baseUrl}/offers?category=food&distance=all`)
   await expect(page.getByRole('heading', { name: 'Find help you can trust' })).toBeVisible()
@@ -116,14 +164,33 @@ test('posts a need and shows suggested offer matches', async ({ page }) => {
       .fill('Need a neighbor who can help with food for a small gathering.')
     await page.getByRole('button', { name: 'Food' }).click()
     await page.getByRole('spinbutton').fill('2')
-    await page.getByRole('button', { name: /Post and match/i }).click()
+    await page.getByRole('button', { name: /Post need/i }).click()
 
-    await page.waitForURL(/\/listing\/.*\/matches/)
-    await expect(page.getByRole('heading', { name: 'Start with these matches' })).toBeVisible()
-    await expect(page.getByText('Fresh Homemade Tamales (dozen)')).toBeVisible()
-    await expect(
-      page.getByRole('link', { name: /Request this offer/i }).first(),
-    ).toBeVisible()
+    await page.waitForURL(/\/needs\?posted=.*/)
+    await expect(page.getByText('Need posted to the calendar')).toBeVisible()
+
+    const posted = new URL(page.url()).searchParams.get('posted')
+    expect(posted).toBeTruthy()
+
+    const sql = postgres(databaseUrl, { max: 1 })
+    try {
+      const [listing] = await sql`
+        SELECT need_status
+        FROM listings
+        WHERE id = ${posted}
+      `
+      const [windows] = await sql`
+        SELECT count(*)::int AS count
+        FROM need_windows
+        WHERE need_id = ${posted}
+          AND status = 'open'
+      `
+
+      expect(listing.need_status).toBe('live')
+      expect(windows.count).toBeGreaterThanOrEqual(1)
+    } finally {
+      await sql.end()
+    }
   } finally {
     await cleanupListing(title)
   }

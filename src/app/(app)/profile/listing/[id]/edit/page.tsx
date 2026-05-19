@@ -20,6 +20,12 @@ export default async function EditListingPage({
   } catch {
     notFound()
   }
+  const windows =
+    listing.type === 'need'
+      ? await exchangeEngine.getNeedWindowsForListing(listing.id, {
+          activeOnly: true,
+        })
+      : []
 
   return (
     <>
@@ -36,7 +42,20 @@ export default async function EditListingPage({
               category: listing.category,
               creditPrice: listing.creditPrice,
               availabilityType: listing.availabilityType,
+              needStatus: listing.needStatus,
+              publicLocationLabel: listing.publicLocationLabel,
+              exactLocation: listing.exactLocation,
+              isLocationPrivate: listing.isLocationPrivate,
+              isUrgent: listing.isUrgent,
+              recurringNote: listing.recurringNote,
               imageUrls: listing.imageUrls,
+              windows: windows.map((window) => ({
+                id: window.id,
+                startsAt: window.startsAt,
+                endsAt: window.endsAt,
+                label: window.label,
+                isFlexible: window.isFlexible,
+              })),
             }}
           />
         </div>

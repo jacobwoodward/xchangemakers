@@ -26,6 +26,16 @@ export type ListingCategory =
   | 'kids'
   | 'other'
 
+export type BusinessCategory =
+  | 'food_drink'
+  | 'home_services'
+  | 'health_wellness'
+  | 'shopping_makers'
+  | 'garden_outdoors'
+  | 'moving_help'
+  | 'professional'
+  | 'other'
+
 export type ExchangeStatus =
   | 'requested'
   | 'accepted'
@@ -64,6 +74,33 @@ export type ActivityType =
   | 'treasury_milestone'
   | 'weekly_stats'
 
+export type NotificationType =
+  | 'matched_need'
+  | 'urgent_need'
+  | 'offer_received'
+  | 'offer_accepted'
+  | 'backup_available'
+  | 'event_match'
+  | 'schedule_reminder'
+  | 'completion_prompt'
+
+export type NotificationPriority = 'normal' | 'high' | 'urgent'
+
+export type AnalyticsEventType =
+  | 'need_posted'
+  | 'need_viewed'
+  | 'filter_applied'
+  | 'helper_offer_submitted'
+  | 'offer_accepted'
+  | 'exchange_completed'
+  | 'helper_dropped'
+  | 'offer_withdrawn'
+  | 'need_cancelled'
+  | 'exchange_cancelled'
+  | 'need_reposted'
+  | 'event_rsvp'
+  | 'business_fallback_clicked'
+
 export type TransactionType =
   | 'earned'
   | 'spent'
@@ -84,6 +121,44 @@ export type OnboardingStep =
   | 'invite_neighbor'
 
 export type AvailabilityType = 'ongoing' | 'one_time' | 'event_only'
+
+export type NeedStatus =
+  | 'draft'
+  | 'live'
+  | 'offered'
+  | 'assigned'
+  | 'confirmed'
+  | 'completed'
+  | 'cancelled'
+  | 'reposted'
+  | 'expired'
+
+export type NeedWindowStatus =
+  | 'open'
+  | 'offered'
+  | 'assigned'
+  | 'completed'
+  | 'cancelled'
+  | 'expired'
+
+export type NeedOfferStatus =
+  | 'offered'
+  | 'accepted'
+  | 'declined'
+  | 'withdrawn'
+  | 'expired'
+
+export type HelperDigestFrequency = 'immediate' | 'daily' | 'weekly' | 'off'
+
+export type IntentNotificationFrequency = HelperDigestFrequency
+
+export type CancellationReason =
+  | 'schedule_conflict'
+  | 'no_longer_needed'
+  | 'helper_drop'
+  | 'requester_cancel'
+  | 'safety_concern'
+  | 'other'
 
 export type StewardFlagTarget = 'member' | 'listing' | 'exchange' | 'happening'
 
@@ -152,6 +227,7 @@ export interface MemberWithDetails extends Member {
   reputationTags: ReputationTagCount[]
   wallet: Wallet
   trustScore: number
+  businessProfile?: BusinessProfile | null
 }
 
 /**
@@ -192,6 +268,12 @@ export interface Listing {
   category: ListingCategory
   creditPrice: number
   availabilityType: AvailabilityType
+  needStatus: NeedStatus | null
+  publicLocationLabel: string | null
+  exactLocation: string | null
+  isLocationPrivate: boolean
+  isUrgent: boolean
+  recurringNote: string | null
   imageUrls: string[]
   isActive: boolean
   refreshedAt: string
@@ -199,6 +281,102 @@ export interface Listing {
   createdAt: string
   updatedAt: string
   member?: Member
+}
+
+/** A concrete time window when a need can be filled. */
+export interface NeedWindow {
+  id: string
+  needId: string
+  startsAt: string
+  endsAt: string
+  label: string | null
+  isFlexible: boolean
+  status: NeedWindowStatus
+  createdAt: string
+  updatedAt: string
+}
+
+/** A helper's offer to fill a timed need. */
+export interface NeedOffer {
+  id: string
+  needId: string
+  windowId: string
+  helperId: string
+  message: string | null
+  status: NeedOfferStatus
+  exchangeId: string | null
+  createdAt: string
+  updatedAt: string
+  helper?: Member
+}
+
+/** A member's categories/radius preferences for being shown needs. */
+export interface HelperPreferences {
+  id: string
+  memberId: string
+  categories: ListingCategory[]
+  radiusMiles: number
+  urgentOnly: boolean
+  digestFrequency: HelperDigestFrequency
+  quietHoursStart: string | null
+  quietHoursEnd: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Onboarding preference capture for needs, help capacity, happenings, and alerts. */
+export interface MemberIntentProfile {
+  id: string
+  memberId: string
+  canHelpCategories: ListingCategory[]
+  needsHelpCategories: ListingCategory[]
+  happeningInterests: HappeningCategory[]
+  radiusMiles: number
+  notificationFrequency: IntentNotificationFrequency
+  shareAvailability: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+/** Calendar-ready timed need view. */
+export interface TimedNeed {
+  listing: Listing
+  requester: Member
+  windows: NeedWindow[]
+  offers: NeedOffer[]
+  currentMemberOffer: NeedOffer | null
+  distanceMiles: number | null
+  isOwnedByCurrentMember: boolean
+}
+
+/** Extended local business profile attached to a business member. */
+export interface BusinessProfile {
+  id: string
+  memberId: string
+  businessName: string
+  categories: BusinessCategory[]
+  address: string
+  serviceArea: string | null
+  phone: string | null
+  websiteUrl: string | null
+  directionsUrl: string | null
+  hours: Record<string, string>
+  photoUrls: string[]
+  contributionNotes: string | null
+  contributionBadges: string[]
+  communityHoursContributed: number
+  rating: number
+  reviewCount: number
+  isCommunityFavorite: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LocalBusiness {
+  profile: BusinessProfile
+  member: MemberWithDetails
+  offerings: Listing[]
+  distanceMiles: number | null
 }
 
 /**
@@ -281,6 +459,45 @@ export interface StewardMatchAssist {
   matches: SuggestedListingMatch[]
 }
 
+export interface StewardCategorySignal {
+  category: ListingCategory
+  needs: number
+  offers: number
+  gap: number
+}
+
+export interface StewardIntentSignal {
+  category: ListingCategory
+  canHelp: number
+  mayNeed: number
+  gap: number
+}
+
+export interface StewardHappeningInterestSignal {
+  category: HappeningCategory
+  interestedMembers: number
+}
+
+export interface StewardActivationMetric {
+  label: string
+  count: number
+}
+
+export interface StewardEventCount {
+  eventType: AnalyticsEventType
+  count: number
+}
+
+export interface StewardCancellationSignal {
+  member: Member
+  total: number
+  helperDrops: number
+  offerWithdrawals: number
+  requesterCancellations: number
+  lastReason: CancellationReason | string | null
+  lastAt: string
+}
+
 /** Operator view for keeping one community trusted, active, and current. */
 export interface StewardDashboard {
   currentSteward: Member
@@ -291,6 +508,8 @@ export interface StewardDashboard {
     pausedMembers: number
     activeNeeds: number
     activeOffers: number
+    urgentNeeds: number
+    needsWithoutOffers: number
     activeExchanges: number
     disputedExchanges: number
     staleListings: number
@@ -302,6 +521,14 @@ export interface StewardDashboard {
   pausedMembers: Member[]
   invites: CommunityInvite[]
   disputes: Exchange[]
+  urgentNeeds: Listing[]
+  needsWithoutOffers: Listing[]
+  categorySignals: StewardCategorySignal[]
+  intentSignals: StewardIntentSignal[]
+  happeningInterestSignals: StewardHappeningInterestSignal[]
+  activationFunnel: StewardActivationMetric[]
+  analyticsCounts: StewardEventCount[]
+  cancellationSignals: StewardCancellationSignal[]
   staleListings: Listing[]
   staleHappenings: Happening[]
   matchAssists: StewardMatchAssist[]
@@ -316,6 +543,13 @@ export interface AvailabilitySlot {
   startTime: string
   endTime: string
   isRecurring: boolean
+}
+
+export interface CreateAvailabilitySlotInput {
+  dayOfWeek: number
+  startTime: string
+  endTime: string
+  isRecurring?: boolean
 }
 
 /** A post-exchange review left by one member about another. */
@@ -370,6 +604,34 @@ export interface ActivityFeedItem {
   id: string
   type: ActivityType
   data: Record<string, unknown>
+  createdAt: string
+}
+
+/** A member-specific in-app alert that should lead to a concrete action. */
+export interface Notification {
+  id: string
+  memberId: string
+  type: NotificationType
+  priority: NotificationPriority
+  title: string
+  body: string
+  targetPath: string
+  readAt: string | null
+  createdAt: string
+}
+
+export interface NotificationFilters {
+  unreadOnly?: boolean
+  limit?: number
+}
+
+export interface AnalyticsEvent {
+  id: string
+  memberId: string | null
+  eventType: AnalyticsEventType
+  targetType: string | null
+  targetId: string | null
+  metadata: Record<string, unknown>
   createdAt: string
 }
 
@@ -481,6 +743,13 @@ export interface CreateListingInput {
   creditPrice: number
   availabilityType?: AvailabilityType
   imageUrls?: string[]
+  needStatus?: NeedStatus | null
+  publicLocationLabel?: string | null
+  exactLocation?: string | null
+  isLocationPrivate?: boolean
+  isUrgent?: boolean
+  recurringNote?: string | null
+  windows?: CreateNeedWindowInput[]
 }
 
 export interface CreateExchangeInput {
@@ -515,4 +784,84 @@ export interface CreateReviewInput {
 export interface SendMessageInput {
   conversationId: string
   content: string
+}
+
+export interface TimedNeedFilters {
+  category?: ListingCategory
+  timeframe?: 'today' | 'week' | 'month'
+  urgentOnly?: boolean
+  distance?: MarketplaceDistanceScope
+  includeOwn?: boolean
+  limit?: number
+}
+
+export interface HappeningFilters {
+  category?: HappeningCategory
+  timeframe?: 'week' | 'month'
+  day?: string
+  limit?: number
+}
+
+export interface LocalBusinessFilters {
+  category?: BusinessCategory
+  listingCategory?: ListingCategory
+  query?: string
+  limit?: number
+}
+
+export interface CreateHappeningInput {
+  title: string
+  description: string
+  category: HappeningCategory
+  location: string
+  startAt: string
+  endAt: string
+  imageUrl?: string | null
+  latitude?: number | null
+  longitude?: number | null
+}
+
+export interface OfferNeedHelpInput {
+  needId: string
+  windowId: string
+  message?: string
+}
+
+export interface CreateNeedWindowInput {
+  id?: string | null
+  startsAt: string
+  endsAt: string
+  label?: string | null
+  isFlexible?: boolean
+}
+
+export interface UpdateHelperPreferencesInput {
+  categories?: ListingCategory[]
+  radiusMiles?: number
+  urgentOnly?: boolean
+  digestFrequency?: HelperDigestFrequency
+  quietHoursStart?: string | null
+  quietHoursEnd?: string | null
+}
+
+export interface UpdateMemberIntentProfileInput {
+  canHelpCategories?: ListingCategory[]
+  needsHelpCategories?: ListingCategory[]
+  happeningInterests?: HappeningCategory[]
+  radiusMiles?: number
+  notificationFrequency?: IntentNotificationFrequency
+  shareAvailability?: boolean
+}
+
+export interface TrackAnalyticsEventInput {
+  eventType: AnalyticsEventType
+  memberId?: string | null
+  targetType?: string | null
+  targetId?: string | null
+  metadata?: Record<string, unknown>
+}
+
+export interface CancellationInput {
+  reason?: CancellationReason | null
+  note?: string | null
 }

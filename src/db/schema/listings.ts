@@ -26,6 +26,18 @@ export const availabilityTypeEnum = pgEnum('availability_type', [
   'event_only',
 ])
 
+export const needStatusEnum = pgEnum('need_status', [
+  'draft',
+  'live',
+  'offered',
+  'assigned',
+  'confirmed',
+  'completed',
+  'cancelled',
+  'reposted',
+  'expired',
+])
+
 export const listings = pgTable('listings', {
   id: uuid('id').primaryKey().defaultRandom(),
   memberId: uuid('member_id').notNull().references(() => members.id),
@@ -35,6 +47,12 @@ export const listings = pgTable('listings', {
   category: listingCategoryEnum('category').notNull(),
   creditPrice: integer('credit_price').notNull(),
   availabilityType: availabilityTypeEnum('availability_type').default('ongoing').notNull(),
+  needStatus: needStatusEnum('need_status'),
+  publicLocationLabel: varchar('public_location_label', { length: 255 }),
+  exactLocation: varchar('exact_location', { length: 500 }),
+  isLocationPrivate: boolean('is_location_private').default(true).notNull(),
+  isUrgent: boolean('is_urgent').default(false).notNull(),
+  recurringNote: varchar('recurring_note', { length: 255 }),
   imageUrls: json('image_urls').$type<string[]>().default([]).notNull(),
   isActive: boolean('is_active').default(true).notNull(),
   refreshedAt: timestamp('refreshed_at', { withTimezone: true }).defaultNow().notNull(),

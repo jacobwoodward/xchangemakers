@@ -2,6 +2,7 @@ import { exchangeEngine } from '@/lib/exchange-engine'
 import { PageHeader } from '@/components/shared/page-header'
 import { PageTransition } from '@/components/shared/page-transition'
 import { HappeningDetail } from '@/components/happenings/happening-detail'
+import { HappeningShareButton } from '@/components/happenings/happening-share-button'
 import { RsvpSummary } from '@/components/happenings/rsvp-summary'
 import { HappeningDetailFooter } from './footer'
 
@@ -12,7 +13,10 @@ export default async function HappeningDetailPage({
 }) {
   const { id } = await params
   await exchangeEngine.initialize()
-  const happening = await exchangeEngine.getHappening(id)
+  const [happening, currentRsvpStatus] = await Promise.all([
+    exchangeEngine.getHappening(id),
+    exchangeEngine.getCurrentHappeningRsvp(id),
+  ])
 
   // For the attendees preview, we load the members who RSVP'd going.
   // In prototype mode we use the seeded members as stand-ins.
@@ -22,7 +26,10 @@ export default async function HappeningDetailPage({
 
   return (
     <>
-      <PageHeader title="Happening" />
+      <PageHeader
+        title="Happening"
+        rightAction={<HappeningShareButton title={happening.title} />}
+      />
       <PageTransition>
         <div className="pt-16 pb-28 px-4">
           <HappeningDetail
@@ -41,7 +48,10 @@ export default async function HappeningDetailPage({
       </PageTransition>
 
       {/* ─── Sticky RSVP footer ─── */}
-      <HappeningDetailFooter happeningId={happening.id} />
+      <HappeningDetailFooter
+        happeningId={happening.id}
+        initialStatus={currentRsvpStatus}
+      />
     </>
   )
 }

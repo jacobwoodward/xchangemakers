@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { MapPin, Users } from 'lucide-react'
 import { PressableCard, Badge, Avatar } from '@/components/ui'
+import { formatHappeningCategory } from '@/lib/happenings'
 import type { Happening, HappeningCategory } from '@/lib/exchange-engine/types'
 import type { Member } from '@/lib/exchange-engine/types'
 
@@ -20,17 +21,6 @@ const CATEGORY_GRADIENTS: Record<HappeningCategory, string> = {
   social: 'from-pink-300 to-rose-400',
   community: 'from-amber-300 to-yellow-500',
   exchange_event: 'from-green-500 to-emerald-700',
-}
-
-const CATEGORY_LABELS: Record<HappeningCategory, string> = {
-  kids: 'Kids',
-  food: 'Food',
-  markets: 'Markets',
-  fitness: 'Fitness',
-  classes: 'Classes',
-  social: 'Social',
-  community: 'Community',
-  exchange_event: 'Exchange',
 }
 
 // ---------------------------------------------------------------------------
@@ -71,7 +61,7 @@ export function HappeningCard({ happening, host }: HappeningCardProps) {
               className={`h-36 w-full bg-gradient-to-br ${CATEGORY_GRADIENTS[happening.category]} flex items-center justify-center`}
             >
               <span className="text-3xl text-white/25 font-bold">
-                {CATEGORY_LABELS[happening.category]}
+                {formatHappeningCategory(happening.category)}
               </span>
             </div>
           )}
@@ -81,7 +71,7 @@ export function HappeningCard({ happening, host }: HappeningCardProps) {
             variant="default"
             className="absolute top-2.5 left-2.5 text-[10px] bg-white/90 text-body backdrop-blur-sm"
           >
-            {CATEGORY_LABELS[happening.category]}
+            {formatHappeningCategory(happening.category)}
           </Badge>
 
           {/* Going count badge — top right */}

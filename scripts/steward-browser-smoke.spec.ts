@@ -7,7 +7,7 @@ const databaseUrl =
   process.env.DATABASE_URL ??
   'postgresql://xchangemakers:xchangemakers@localhost:5433/xchangemakers'
 
-test.use({ channel: 'chrome' })
+test.use({ channel: 'msedge' })
 
 interface WalletSnapshot {
   id: string
@@ -58,7 +58,7 @@ async function createStewardFixture(): Promise<StewardFixture> {
     const [steward] = await sql`
       SELECT id, email, community_id
       FROM members
-      WHERE lower(email) IN ('lauren@example.com', 'lauren.chen@email.com')
+      WHERE lower(email) = 'lauren.chen@email.com'
       ORDER BY joined_at
       LIMIT 1
     `
@@ -110,9 +110,9 @@ async function createStewardFixture(): Promise<StewardFixture> {
         'Created by steward smoke coverage.',
         'Ready to join',
         ${steward.community_id},
-        'Oak Forest',
-        29.8105,
-        -95.4100,
+        'Friendswood',
+        29.5294,
+        -95.2010,
         'standard',
         'pending',
         false
@@ -207,9 +207,9 @@ async function createStewardFixture(): Promise<StewardFixture> {
         ${pastHappeningTitle},
         'Past event created by steward smoke coverage.',
         'community',
-        'Oak Forest Park',
-        29.8105,
-        -95.4100,
+        'Friendswood Park',
+        29.5294,
+        -95.2010,
         now() - interval '3 days',
         now() - interval '2 days'
       )
@@ -373,6 +373,10 @@ async function cleanupFixture(fixture: StewardFixture | null) {
   }
 }
 
+function stewardRow(page: Page, text: string) {
+  return page.locator('div.border-t', { hasText: text }).first()
+}
+
 test('lets a steward operate member, dispute, cleanup, match, and flag queues', async ({ page }) => {
   let fixture: StewardFixture | null = null
 
@@ -383,6 +387,7 @@ test('lets a steward operate member, dispute, cleanup, match, and flag queues', 
     await page.goto(`${baseUrl}/steward`)
     await expect(page.getByRole('heading', { name: 'Steward Console' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Community Health' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Cancellation Signals' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Member Review' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Invite Tracking' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Disputes' })).toBeVisible()
@@ -390,21 +395,21 @@ test('lets a steward operate member, dispute, cleanup, match, and flag queues', 
     await expect(page.getByRole('heading', { name: 'Content Cleanup' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Flagged Content' })).toBeVisible()
 
-    const memberRow = page.locator('div').filter({ hasText: fixture.pendingMemberEmail }).first()
+    const memberRow = stewardRow(page, fixture.pendingMemberEmail)
     await memberRow.getByRole('button', { name: 'Approve' }).click()
     await expect(page.getByText(fixture.pendingMemberEmail)).not.toBeVisible()
 
-    const disputeRow = page.locator('div').filter({ hasText: fixture.disputeTitle }).first()
+    const disputeRow = stewardRow(page, fixture.disputeTitle)
     await disputeRow.getByRole('button', { name: 'Refund' }).click()
 
-    const listingRow = page.locator('div').filter({ hasText: fixture.staleListingTitle }).first()
+    const listingRow = stewardRow(page, fixture.staleListingTitle)
     await listingRow.getByRole('button', { name: 'Archive' }).click()
 
-    const eventRow = page.locator('div').filter({ hasText: fixture.pastHappeningTitle }).first()
+    const eventRow = stewardRow(page, fixture.pastHappeningTitle)
     await eventRow.getByRole('button', { name: 'Remove' }).click()
     await expect(page.getByText(fixture.pastHappeningTitle)).not.toBeVisible()
 
-    const flagRow = page.locator('div').filter({ hasText: fixture.flagReason }).first()
+    const flagRow = stewardRow(page, fixture.flagReason)
     await flagRow.getByRole('button', { name: 'Resolve' }).click()
     await expect(page.getByText(fixture.flagReason)).not.toBeVisible()
 

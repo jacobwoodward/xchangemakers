@@ -42,7 +42,7 @@ async function main() {
     const [row] = await sql`
       SELECT count(*)::int AS count
       FROM community_invites
-      WHERE code IN ('OAK-FOREST', 'GARDEN-OAKS', 'HEIGHTS')
+      WHERE code IN ('FRIENDSWOOD', 'WEST-FRIENDSWOOD', 'PEARLAND')
     `
     assert(row.count === 3, `expected 3 demo invite codes, found ${row.count}`)
   })
@@ -66,7 +66,7 @@ async function main() {
   await check('signup exposes community and invite fields', async () => {
     const response = await fetch(`${baseUrl}/sign-up`)
     const html = await response.text()
-    assert(html.includes('Oak Forest'), 'signup did not render seeded communities')
+    assert(html.includes('Friendswood'), 'signup did not render seeded communities')
     assert(html.includes('Invite Code'), 'signup did not render invite field')
   })
 

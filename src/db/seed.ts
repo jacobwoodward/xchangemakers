@@ -1,10 +1,10 @@
 /**
  * Seed script for xChangeMakers prototype.
- * Populates a local Postgres database with rich, realistic data
- * for a Houston "Oak Forest" neighborhood.
+ * Populates a local Postgres database with rich, realistic Friendswood beta data.
  *
  * Usage: npm run db:seed   (which runs: tsx src/db/seed.ts)
  */
+import { scryptSync } from 'node:crypto'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import { eq } from 'drizzle-orm'
 import postgres from 'postgres'
@@ -17,6 +17,13 @@ const DATABASE_URL =
 
 const client = postgres(DATABASE_URL)
 const db = drizzle(client, { schema })
+const DEMO_PASSWORD_HASH = hashPasswordSync('password')
+
+function hashPasswordSync(password: string): string {
+  const salt = 'local-demo-auth-salt'
+  const key = scryptSync(password, salt, 64).toString('hex')
+  return `scrypt:${salt}:${key}`
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 function daysFromNow(n: number): Date {
@@ -34,6 +41,12 @@ function daysAgo(n: number): Date {
 function hoursFromNow(n: number): Date {
   const d = new Date()
   d.setHours(d.getHours() + n)
+  return d
+}
+
+function atRelativeDay(dayOffset: number, hour: number, minute = 0): Date {
+  const d = daysFromNow(dayOffset)
+  d.setHours(hour, minute, 0, 0)
   return d
 }
 
@@ -68,6 +81,11 @@ const CHRIS_ID     = 'a0000000-0000-4000-8000-00000000000f'
 const DIANA_ID     = 'a0000000-0000-4000-8000-000000000010'
 const OMAR_ID      = 'a0000000-0000-4000-8000-000000000011'
 const ELIJAH_ID    = 'a0000000-0000-4000-8000-000000000012'
+
+// Communities
+const FRIENDSWOOD_COMMUNITY_ID = '90000000-0000-4000-8000-000000000001'
+const WEST_FRIENDSWOOD_COMMUNITY_ID = '90000000-0000-4000-8000-000000000002'
+const PEARLAND_COMMUNITY_ID = '90000000-0000-4000-8000-000000000003'
 
 // Wallets
 const LAUREN_WALLET  = 'b0000000-0000-4000-8000-000000000001'
@@ -134,6 +152,19 @@ const L_NEED_CAKE     = 'c0000000-0000-4000-8000-000000000032'
 const L_NEED_WIFI     = 'c0000000-0000-4000-8000-000000000033'
 const L_NEED_SPANISH  = 'c0000000-0000-4000-8000-000000000034'
 
+// Timed need windows
+const NW_LAUREN_MOVE  = 'e1000000-0000-4000-8000-000000000001'
+const NW_FENCE_LUMBER = 'e1000000-0000-4000-8000-000000000002'
+const NW_MATH_TUTOR   = 'e1000000-0000-4000-8000-000000000003'
+const NW_CAKE         = 'e1000000-0000-4000-8000-000000000004'
+const NW_WIFI         = 'e1000000-0000-4000-8000-000000000005'
+const NW_SPANISH      = 'e1000000-0000-4000-8000-000000000006'
+const NW_MATH_TUTOR_ALT = 'e1000000-0000-4000-8000-000000000007'
+
+// Helper offers
+const NO_DAVID_MOVE   = 'e2000000-0000-4000-8000-000000000001'
+const NO_JAMES_MOVE   = 'e2000000-0000-4000-8000-000000000002'
+
 // Exchanges
 const EX_LAUREN_TAMALES  = 'd0000000-0000-4000-8000-000000000001'
 const EX_LAUREN_YOGA     = 'd0000000-0000-4000-8000-000000000002'
@@ -178,13 +209,15 @@ const CONV_LAUREN_PRIYA  = 'cc000000-0000-4000-8000-000000000002'
 const CONV_LAUREN_SARAH  = 'cc000000-0000-4000-8000-000000000003'
 
 // Treasury
-const TREASURY_OAK_FOREST = 'dd000000-0000-4000-8000-000000000001'
+const TREASURY_FRIENDSWOOD = 'dd000000-0000-4000-8000-000000000001'
 
 // ─── Seed ──────────────────────────────────────────────────────────────────
 async function seed() {
   console.log('Clearing existing data...')
 
   // Delete in reverse dependency order
+  await db.delete(schema.authSessions)
+  await db.delete(schema.authAccounts)
   await db.delete(schema.stewardFlags)
   await db.delete(schema.reputationTags)
   await db.delete(schema.reviews)
@@ -192,21 +225,92 @@ async function seed() {
   await db.delete(schema.messages)
   await db.delete(schema.conversationParticipants)
   await db.delete(schema.conversations)
+  await db.delete(schema.notifications)
+  await db.delete(schema.analyticsEvents)
   await db.delete(schema.activityFeed)
   await db.delete(schema.happeningRsvps)
   await db.delete(schema.happenings)
+  await db.delete(schema.needOffers)
   await db.delete(schema.walletTransactions)
   await db.delete(schema.bookings)
   await db.delete(schema.availabilitySlots)
   await db.delete(schema.exchanges)
+  await db.delete(schema.needWindows)
+  await db.delete(schema.helperPreferences)
+  await db.delete(schema.memberIntentProfiles)
   await db.delete(schema.listings)
   await db.delete(schema.wallets)
   await db.delete(schema.treasury)
+  await db.delete(schema.businessProfiles)
   await db.delete(schema.members)
+  await db.delete(schema.communityInvites)
+  await db.delete(schema.communities)
 
   console.log('All tables cleared.')
 
-  // ── 1. Members ──────────────────────────────────────────────────────────
+  // ── 1. Launch communities ───────────────────────────────────────────────
+  console.log('Inserting Friendswood launch communities...')
+
+  await db.insert(schema.communities).values([
+    {
+      id: FRIENDSWOOD_COMMUNITY_ID,
+      name: 'Friendswood',
+      slug: 'friendswood',
+      city: 'Friendswood',
+      region: 'TX',
+      postalCode: '77546',
+      centerLatitude: '29.5294000',
+      centerLongitude: '-95.2010000',
+      status: 'active',
+      inviteOnly: true,
+    },
+    {
+      id: WEST_FRIENDSWOOD_COMMUNITY_ID,
+      name: 'West Friendswood',
+      slug: 'west-friendswood',
+      city: 'Friendswood',
+      region: 'TX',
+      postalCode: '77546',
+      centerLatitude: '29.5308000',
+      centerLongitude: '-95.2210000',
+      status: 'active',
+      inviteOnly: true,
+    },
+    {
+      id: PEARLAND_COMMUNITY_ID,
+      name: 'Pearland',
+      slug: 'pearland',
+      city: 'Pearland',
+      region: 'TX',
+      postalCode: '77581',
+      centerLatitude: '29.5636000',
+      centerLongitude: '-95.2860000',
+      status: 'active',
+      inviteOnly: true,
+    },
+  ])
+
+  await db.insert(schema.communityInvites).values([
+    {
+      communityId: FRIENDSWOOD_COMMUNITY_ID,
+      code: 'FRIENDSWOOD',
+      label: 'Friendswood beta invite',
+    },
+    {
+      communityId: WEST_FRIENDSWOOD_COMMUNITY_ID,
+      code: 'WEST-FRIENDSWOOD',
+      label: 'West Friendswood beta invite',
+    },
+    {
+      communityId: PEARLAND_COMMUNITY_ID,
+      code: 'PEARLAND',
+      label: 'Pearland beta invite',
+    },
+  ])
+
+  console.log('  3 communities and 3 invite codes inserted.')
+
+  // ── 2. Members ──────────────────────────────────────────────────────────
   console.log('Inserting members...')
 
   await db.insert(schema.members).values([
@@ -216,9 +320,9 @@ async function seed() {
       lastName: 'Chen',
       email: 'lauren.chen@email.com',
       avatarUrl: null,
-      bio: 'Community builder and neighborhood connector. I moved to Oak Forest three years ago and fell in love with the people here. I believe the best things in life come from sharing what we have with our neighbors.',
+      bio: 'Community builder and neighborhood connector. I moved to Friendswood three years ago and fell in love with the people here. I believe the best things in life come from sharing what we have with our neighbors.',
       vibe: 'Building bridges between neighbors',
-      neighborhood: 'Oak Forest',
+      neighborhood: 'Friendswood',
       latitude: '29.8080',
       longitude: '-95.3960',
       isAvailable: true,
@@ -234,12 +338,12 @@ async function seed() {
       avatarUrl: null,
       bio: 'Third-generation tamale maker. My abuela taught me, and now I teach the neighborhood. I also do weekly meal prep for busy families — real home-cooked Mexican food, not fast food.',
       vibe: 'Feeding the neighborhood one tamale at a time',
-      neighborhood: 'Oak Forest',
+      neighborhood: 'Friendswood',
       latitude: '29.8095',
       longitude: '-95.3975',
       isAvailable: true,
       availabilityNote: 'Mornings and early afternoons',
-      membershipType: 'standard',
+      membershipType: 'business',
       joinedAt: daysAgo(38),
     },
     {
@@ -249,13 +353,13 @@ async function seed() {
       email: 'jake.mitchell@email.com',
       avatarUrl: null,
       bio: 'Retired firefighter turned neighborhood handyman. If it is broken, I can probably fix it. Lawn care, minor plumbing, drywall — you name it. No job too small.',
-      vibe: 'Keeping Oak Forest running smooth',
-      neighborhood: 'Oak Forest',
+      vibe: 'Keeping Friendswood running smooth',
+      neighborhood: 'Friendswood',
       latitude: '29.8110',
       longitude: '-95.3940',
       isAvailable: true,
       availabilityNote: 'Mon-Sat, flexible hours',
-      membershipType: 'standard',
+      membershipType: 'business',
       joinedAt: daysAgo(42),
     },
     {
@@ -266,12 +370,12 @@ async function seed() {
       avatarUrl: null,
       bio: 'Certified yoga instructor and meditation guide. I teach vinyasa flow and mindfulness for all levels. I believe wellness should be accessible to everyone, not just people who can afford a studio membership.',
       vibe: 'Breathe, stretch, connect',
-      neighborhood: 'Garden Oaks',
+      neighborhood: 'West Friendswood',
       latitude: '29.8130',
       longitude: '-95.3985',
       isAvailable: true,
       availabilityNote: 'Early mornings and evenings',
-      membershipType: 'standard',
+      membershipType: 'business',
       joinedAt: daysAgo(35),
     },
     {
@@ -282,12 +386,12 @@ async function seed() {
       avatarUrl: null,
       bio: 'Former bank manager. I help neighbors with tax prep, budgeting, and financial literacy. Everyone deserves to understand their money — no jargon, no judgment.',
       vibe: 'Making money less scary',
-      neighborhood: 'Oak Forest',
+      neighborhood: 'Friendswood',
       latitude: '29.8070',
       longitude: '-95.3950',
       isAvailable: true,
       availabilityNote: 'Evenings and weekends',
-      membershipType: 'standard',
+      membershipType: 'business',
       joinedAt: daysAgo(30),
     },
     {
@@ -296,14 +400,14 @@ async function seed() {
       lastName: 'Chen',
       email: 'sarah.chen@email.com',
       avatarUrl: null,
-      bio: 'Sourdough obsessive. I have been maintaining my starter for four years and baking for the neighborhood ever since. I also teach small-group bread classes from my kitchen on De Milo Drive.',
+      bio: 'Sourdough obsessive. I have been maintaining my starter for four years and baking for the neighborhood ever since. I also teach small-group bread classes from my Friendswood kitchen.',
       vibe: 'Life is better with fresh bread',
-      neighborhood: 'Oak Forest',
+      neighborhood: 'Friendswood',
       latitude: '29.8100',
       longitude: '-95.4010',
       isAvailable: true,
       availabilityNote: 'Baking days: Tue/Thu/Sat',
-      membershipType: 'standard',
+      membershipType: 'business',
       joinedAt: daysAgo(40),
     },
     {
@@ -312,14 +416,14 @@ async function seed() {
       lastName: 'Kim',
       email: 'david.kim@email.com',
       avatarUrl: null,
-      bio: 'Bike mechanic and woodworker. I fix bikes in my garage on Wakefield and build custom shelves, cutting boards, and small furniture from reclaimed wood. Everything by hand.',
+      bio: 'Bike mechanic and woodworker. I fix bikes in my garage in Friendswood and build custom shelves, cutting boards, and small furniture from reclaimed wood. Everything by hand.',
       vibe: 'Fix it, build it, ride it',
-      neighborhood: 'Oak Forest',
+      neighborhood: 'Friendswood',
       latitude: '29.8060',
       longitude: '-95.3990',
       isAvailable: true,
       availabilityNote: 'Afternoons and Saturdays',
-      membershipType: 'standard',
+      membershipType: 'business',
       joinedAt: daysAgo(33),
     },
     {
@@ -330,7 +434,7 @@ async function seed() {
       avatarUrl: null,
       bio: 'Intuitive tarot reader and energy healer. I offer 30- and 60-minute sessions to help you find clarity, release what no longer serves you, and reconnect with your inner compass.',
       vibe: 'Your energy tells the story',
-      neighborhood: 'Heights',
+      neighborhood: 'Pearland',
       latitude: '29.7980',
       longitude: '-95.3930',
       isAvailable: true,
@@ -344,9 +448,9 @@ async function seed() {
       lastName: 'Rodriguez',
       email: 'tom.rodriguez@email.com',
       avatarUrl: null,
-      bio: 'Photographer and licensed drone pilot. Family portraits, events, real estate aerials — I do it all. Born and raised in the Heights, now shooting from above and below.',
-      vibe: 'Capturing Oak Forest from every angle',
-      neighborhood: 'Heights',
+      bio: 'Photographer and licensed drone pilot. Family portraits, events, real estate aerials — I do it all. Born and raised in Pearland, now shooting from above and below.',
+      vibe: 'Capturing Friendswood from every angle',
+      neighborhood: 'Pearland',
       latitude: '29.7990',
       longitude: '-95.3960',
       isAvailable: true,
@@ -362,7 +466,7 @@ async function seed() {
       avatarUrl: null,
       bio: 'Retired high school teacher with 22 years in math and science. I tutor kids from elementary through high school — algebra, geometry, biology, chemistry. Patient and thorough.',
       vibe: 'Every kid can learn math',
-      neighborhood: 'Garden Oaks',
+      neighborhood: 'West Friendswood',
       latitude: '29.8140',
       longitude: '-95.4000',
       isAvailable: true,
@@ -378,7 +482,7 @@ async function seed() {
       avatarUrl: null,
       bio: 'Dog lover and reliable pet sitter. I walk dogs, do overnight stays, and handle cats too. Your pets are family — I treat them that way. Fully insured.',
       vibe: 'Your pets, my priority',
-      neighborhood: 'Oak Forest',
+      neighborhood: 'Friendswood',
       latitude: '29.8085',
       longitude: '-95.3945',
       isAvailable: true,
@@ -394,12 +498,12 @@ async function seed() {
       avatarUrl: null,
       bio: 'Master gardener and herb grower. I sell starter kits (basil, cilantro, rosemary, mint) and consult on garden setup. If you have a patch of dirt, I can make it productive.',
       vibe: 'Grow something today',
-      neighborhood: 'Oak Forest',
+      neighborhood: 'Friendswood',
       latitude: '29.8075',
       longitude: '-95.4020',
       isAvailable: true,
       availabilityNote: 'Mornings, rain or shine',
-      membershipType: 'standard',
+      membershipType: 'business',
       joinedAt: daysAgo(32),
     },
     {
@@ -410,7 +514,7 @@ async function seed() {
       avatarUrl: null,
       bio: 'Handyman and furniture restorer. I bring old dressers, tables, and chairs back to life. Also do general repairs — electrical, plumbing basics, drywall. 15 years experience.',
       vibe: 'Old things made new again',
-      neighborhood: 'Oak Forest',
+      neighborhood: 'Friendswood',
       latitude: '29.8120',
       longitude: '-95.3970',
       isAvailable: true,
@@ -426,7 +530,7 @@ async function seed() {
       avatarUrl: null,
       bio: 'Arabic calligrapher and language tutor. I teach traditional calligraphy workshops and conversational Arabic for beginners. Art and language are how we keep culture alive.',
       vibe: 'Every letter is art',
-      neighborhood: 'Garden Oaks',
+      neighborhood: 'West Friendswood',
       latitude: '29.8150',
       longitude: '-95.3955',
       isAvailable: true,
@@ -442,7 +546,7 @@ async function seed() {
       avatarUrl: null,
       bio: 'Guitar teacher and home studio producer. I teach acoustic and electric guitar for beginners through intermediate. I also record demos and help local musicians with basic production.',
       vibe: 'Making music, making neighbors',
-      neighborhood: 'Heights',
+      neighborhood: 'Pearland',
       latitude: '29.7970',
       longitude: '-95.3980',
       isAvailable: true,
@@ -458,12 +562,12 @@ async function seed() {
       avatarUrl: null,
       bio: 'Nail artist and skincare enthusiast. I do gel manicures, nail art, and basic facials from my home studio. Salon quality, neighborhood prices.',
       vibe: 'Look good, feel good',
-      neighborhood: 'Oak Forest',
+      neighborhood: 'Friendswood',
       latitude: '29.8090',
       longitude: '-95.4005',
       isAvailable: true,
       availabilityNote: 'Wed-Sun by appointment',
-      membershipType: 'standard',
+      membershipType: 'business',
       joinedAt: daysAgo(12),
     },
     {
@@ -474,7 +578,7 @@ async function seed() {
       avatarUrl: null,
       bio: 'Freelance web designer and all-around tech guy. I build simple websites, fix computers, set up smart home devices, and untangle WiFi problems. No tech question is too basic.',
       vibe: 'Tech help without the attitude',
-      neighborhood: 'Oak Forest',
+      neighborhood: 'Friendswood',
       latitude: '29.8105',
       longitude: '-95.3935',
       isAvailable: true,
@@ -488,9 +592,9 @@ async function seed() {
       lastName: 'Banks',
       email: 'elijah.banks@email.com',
       avatarUrl: null,
-      bio: 'NASM-certified personal trainer and nutrition coach. I do one-on-one sessions at TC Jester Park and build custom meal plans. Fitness should fit your life, not the other way around.',
+      bio: 'NASM-certified personal trainer and nutrition coach. I do one-on-one sessions at the Friendswood Park Pavilion and build custom meal plans. Fitness should fit your life, not the other way around.',
       vibe: 'Stronger every day',
-      neighborhood: 'Garden Oaks',
+      neighborhood: 'West Friendswood',
       latitude: '29.8160',
       longitude: '-95.3990',
       isAvailable: true,
@@ -499,6 +603,21 @@ async function seed() {
       joinedAt: daysAgo(3),
     },
   ])
+
+  await db
+    .update(schema.members)
+    .set({ communityId: FRIENDSWOOD_COMMUNITY_ID })
+    .where(eq(schema.members.neighborhood, 'Friendswood'))
+
+  await db
+    .update(schema.members)
+    .set({ communityId: WEST_FRIENDSWOOD_COMMUNITY_ID })
+    .where(eq(schema.members.neighborhood, 'West Friendswood'))
+
+  await db
+    .update(schema.members)
+    .set({ communityId: PEARLAND_COMMUNITY_ID })
+    .where(eq(schema.members.neighborhood, 'Pearland'))
 
   await db
     .update(schema.members)
@@ -511,7 +630,261 @@ async function seed() {
 
   console.log('  18 members inserted.')
 
-  // ── 2. Wallets ──────────────────────────────────────────────────────────
+  const memberAuthRows = await db
+    .select({ id: schema.members.id, email: schema.members.email })
+    .from(schema.members)
+
+  await db.insert(schema.authAccounts).values(
+    memberAuthRows.map((member) => ({
+      memberId: member.id,
+      email: member.email.toLowerCase(),
+      passwordHash: DEMO_PASSWORD_HASH,
+    })),
+  )
+
+  console.log('  18 demo auth accounts inserted.')
+
+  // ── 2. Local business profiles ─────────────────────────────────────────
+  console.log('Inserting local business profiles...')
+
+  await db.insert(schema.businessProfiles).values([
+    {
+      memberId: MARIA_ID,
+      businessName: 'The Treat House',
+      categories: ['food_drink'],
+      address: '1842 Cheshire Ln, Friendswood, TX 77546',
+      serviceArea: 'Friendswood',
+      phone: '(713) 555-0142',
+      websiteUrl: 'https://example.com/the-treat-house',
+      directionsUrl: 'https://www.google.com/maps/search/?api=1&query=1842+Cheshire+Ln+Friendswood+TX+77546',
+      hours: {
+        Mon: 'Closed',
+        Tue: '9:00 AM - 3:00 PM',
+        Wed: '9:00 AM - 3:00 PM',
+        Thu: '9:00 AM - 3:00 PM',
+        Fri: '9:00 AM - 5:00 PM',
+        Sat: '8:00 AM - 1:00 PM',
+        Sun: 'Closed',
+      },
+      photoUrls: [
+        'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=900&q=80',
+      ],
+      contributionNotes:
+        'Hosts monthly baking tables and donates extra bread to neighbor meal trains.',
+      contributionBadges: ['Meal trains', 'Workshop host'],
+      communityHoursContributed: 28,
+      rating: '4.9',
+      reviewCount: 36,
+      isCommunityFavorite: true,
+    },
+    {
+      memberId: JAKE_M_ID,
+      businessName: 'Fix It Right Home Services',
+      categories: ['home_services', 'garden_outdoors', 'moving_help'],
+      address: '2206 Alba Rd, Friendswood, TX 77546',
+      serviceArea: 'Friendswood and West Friendswood',
+      phone: '(713) 555-0188',
+      websiteUrl: 'https://example.com/fix-it-right',
+      directionsUrl: 'https://www.google.com/maps/search/?api=1&query=2206+Alba+Rd+Friendswood+TX+77546',
+      hours: {
+        Mon: '8:00 AM - 5:00 PM',
+        Tue: '8:00 AM - 5:00 PM',
+        Wed: '8:00 AM - 5:00 PM',
+        Thu: '8:00 AM - 5:00 PM',
+        Fri: '8:00 AM - 5:00 PM',
+        Sat: '9:00 AM - 2:00 PM',
+        Sun: 'Closed',
+      },
+      photoUrls: [
+        'https://images.unsplash.com/photo-1503387762-592deb58ef4e?auto=format&fit=crop&w=900&q=80',
+      ],
+      contributionNotes:
+        'Keeps a few Saturday hours open each month for low-cost neighbor repairs.',
+      contributionBadges: ['Repair help', 'Moving support'],
+      communityHoursContributed: 34,
+      rating: '4.8',
+      reviewCount: 29,
+      isCommunityFavorite: true,
+    },
+    {
+      memberId: PRIYA_ID,
+      businessName: 'Sunrise Yoga Studio',
+      categories: ['health_wellness'],
+      address: '1020 W Parkwood Ave, Friendswood, TX 77546',
+      serviceArea: 'West Friendswood',
+      phone: '(713) 555-0165',
+      websiteUrl: 'https://example.com/sunrise-yoga',
+      directionsUrl: 'https://www.google.com/maps/search/?api=1&query=1020+W+Parkwood+Ave+Friendswood+TX+77546',
+      hours: {
+        Mon: '6:30 AM - 7:30 PM',
+        Tue: '6:30 AM - 7:30 PM',
+        Wed: '6:30 AM - 7:30 PM',
+        Thu: '6:30 AM - 7:30 PM',
+        Fri: '6:30 AM - 5:00 PM',
+        Sat: '8:00 AM - 12:00 PM',
+        Sun: '8:00 AM - 12:00 PM',
+      },
+      photoUrls: [
+        'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=900&q=80',
+      ],
+      contributionNotes:
+        'Offers a free community class every first Saturday in the park.',
+      contributionBadges: ['Free classes', 'Wellness access'],
+      communityHoursContributed: 42,
+      rating: '5.0',
+      reviewCount: 31,
+      isCommunityFavorite: true,
+    },
+    {
+      memberId: MARCUS_ID,
+      businessName: 'Friendswood Money Help',
+      categories: ['professional'],
+      address: '1515 S Friendswood Dr, Friendswood, TX 77546',
+      serviceArea: 'Friendswood',
+      phone: '(713) 555-0117',
+      websiteUrl: 'https://example.com/friendswood-money-help',
+      directionsUrl: 'https://www.google.com/maps/search/?api=1&query=1515+S+Friendswood+Dr+Friendswood+TX+77546',
+      hours: {
+        Mon: 'By appointment',
+        Tue: 'By appointment',
+        Wed: 'By appointment',
+        Thu: 'By appointment',
+        Fri: 'By appointment',
+        Sat: '10:00 AM - 1:00 PM',
+        Sun: 'Closed',
+      },
+      photoUrls: [
+        'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=900&q=80',
+      ],
+      contributionNotes:
+        'Runs quarterly no-jargon budgeting sessions for neighbors.',
+      contributionBadges: ['Financial coaching', 'Workshops'],
+      communityHoursContributed: 19,
+      rating: '4.9',
+      reviewCount: 18,
+      isCommunityFavorite: false,
+    },
+    {
+      memberId: SARAH_ID,
+      businessName: 'Hidden Gem Bakery',
+      categories: ['food_drink', 'shopping_makers'],
+      address: '1340 S Friendswood Dr, Friendswood, TX 77546',
+      serviceArea: 'Friendswood',
+      phone: '(713) 555-0138',
+      websiteUrl: 'https://example.com/hidden-gem-bakery',
+      directionsUrl: 'https://www.google.com/maps/search/?api=1&query=1340+S+Friendswood+Dr+Friendswood+TX+77546',
+      hours: {
+        Mon: 'Closed',
+        Tue: '8:00 AM - 2:00 PM',
+        Wed: 'Closed',
+        Thu: '8:00 AM - 2:00 PM',
+        Fri: '8:00 AM - 2:00 PM',
+        Sat: '8:00 AM - 1:00 PM',
+        Sun: 'Closed',
+      },
+      photoUrls: [
+        'https://images.unsplash.com/photo-1608198093002-ad4e005484ec?auto=format&fit=crop&w=900&q=80',
+      ],
+      contributionNotes:
+        'Teaches small sourdough classes and shares starter kits with new bakers.',
+      contributionBadges: ['Bread classes', 'Starter kits'],
+      communityHoursContributed: 24,
+      rating: '4.9',
+      reviewCount: 42,
+      isCommunityFavorite: true,
+    },
+    {
+      memberId: DAVID_ID,
+      businessName: 'Greenleaf Workshop',
+      categories: ['shopping_makers', 'home_services', 'garden_outdoors'],
+      address: '2110 S Friendswood Dr, Friendswood, TX 77546',
+      serviceArea: 'Friendswood',
+      phone: '(713) 555-0154',
+      websiteUrl: 'https://example.com/greenleaf-workshop',
+      directionsUrl: 'https://www.google.com/maps/search/?api=1&query=2110+S+Friendswood+Dr+Friendswood+TX+77546',
+      hours: {
+        Mon: 'Closed',
+        Tue: '10:00 AM - 5:00 PM',
+        Wed: '10:00 AM - 5:00 PM',
+        Thu: '10:00 AM - 5:00 PM',
+        Fri: '10:00 AM - 5:00 PM',
+        Sat: '9:00 AM - 3:00 PM',
+        Sun: 'Closed',
+      },
+      photoUrls: [
+        'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=900&q=80',
+      ],
+      contributionNotes:
+        'Builds planter boxes for community gardens and repairs donated bikes.',
+      contributionBadges: ['Garden builds', 'Bike repair'],
+      communityHoursContributed: 38,
+      rating: '5.0',
+      reviewCount: 28,
+      isCommunityFavorite: true,
+    },
+    {
+      memberId: ROSA_ID,
+      businessName: 'Greenleaf Nursery',
+      categories: ['garden_outdoors', 'shopping_makers'],
+      address: '123 Garden Way, Friendswood, TX 77546',
+      serviceArea: 'Friendswood',
+      phone: '(713) 555-0172',
+      websiteUrl: 'https://example.com/greenleaf-nursery',
+      directionsUrl: 'https://www.google.com/maps/search/?api=1&query=123+Garden+Way+Friendswood+TX+77546',
+      hours: {
+        Mon: '9:00 AM - 6:00 PM',
+        Tue: '9:00 AM - 6:00 PM',
+        Wed: '9:00 AM - 6:00 PM',
+        Thu: '9:00 AM - 6:00 PM',
+        Fri: '9:00 AM - 6:00 PM',
+        Sat: '8:00 AM - 5:00 PM',
+        Sun: '10:00 AM - 4:00 PM',
+      },
+      photoUrls: [
+        'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?auto=format&fit=crop&w=900&q=80',
+      ],
+      contributionNotes:
+        'Hosts workshops and donates native plants to community gardens.',
+      contributionBadges: ['Donates plants', 'Garden workshops'],
+      communityHoursContributed: 46,
+      rating: '5.0',
+      reviewCount: 28,
+      isCommunityFavorite: true,
+    },
+    {
+      memberId: DIANA_ID,
+      businessName: 'Glow & Nail Studio',
+      categories: ['health_wellness'],
+      address: '1704 W Parkwood Ave, Friendswood, TX 77546',
+      serviceArea: 'Friendswood',
+      phone: '(713) 555-0191',
+      websiteUrl: 'https://example.com/glow-nail-studio',
+      directionsUrl: 'https://www.google.com/maps/search/?api=1&query=1704+W+Parkwood+Ave+Friendswood+TX+77546',
+      hours: {
+        Mon: 'Closed',
+        Tue: 'Closed',
+        Wed: '11:00 AM - 6:00 PM',
+        Thu: '11:00 AM - 6:00 PM',
+        Fri: '11:00 AM - 6:00 PM',
+        Sat: '10:00 AM - 4:00 PM',
+        Sun: '12:00 PM - 4:00 PM',
+      },
+      photoUrls: [
+        'https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=900&q=80',
+      ],
+      contributionNotes:
+        'Donates care packages and offers discounted appointments after community events.',
+      contributionBadges: ['Care packages', 'Event support'],
+      communityHoursContributed: 16,
+      rating: '4.8',
+      reviewCount: 22,
+      isCommunityFavorite: false,
+    },
+  ])
+
+  console.log('  8 business profiles inserted.')
+
+  // ── 3. Wallets ──────────────────────────────────────────────────────────
   console.log('Inserting wallets...')
 
   await db.insert(schema.wallets).values([
@@ -537,7 +910,7 @@ async function seed() {
 
   console.log('  18 wallets inserted.')
 
-  // ── 3. Listings ─────────────────────────────────────────────────────────
+  // ── 4. Listings ─────────────────────────────────────────────────────────
   console.log('Inserting listings...')
 
   await db.insert(schema.listings).values([
@@ -546,11 +919,11 @@ async function seed() {
     { id: L_MEAL_PREP, memberId: MARIA_ID, type: 'offering', title: 'Weekly Meal Prep — Mexican Home Cooking', description: 'Five days of home-cooked meals: enchiladas, rice and beans, caldo, chile rellenos, and more. Feeds a family of four. Containers provided, just return them next week.', category: 'food', creditPrice: 40, availabilityType: 'ongoing', imageUrls: [] },
 
     // Jake Mitchell — home
-    { id: L_LAWN, memberId: JAKE_M_ID, type: 'offering', title: 'Yard Maintenance & Lawn Care', description: 'Mowing, edging, weed-eating, and leaf blowing for standard Oak Forest lots. I bring my own equipment. Weekly or one-time service available.', category: 'home', creditPrice: 20, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_LAWN, memberId: JAKE_M_ID, type: 'offering', title: 'Yard Maintenance & Lawn Care', description: 'Mowing, edging, weed-eating, and leaf blowing for standard Friendswood lots. I bring my own equipment. Weekly or one-time service available.', category: 'home', creditPrice: 20, availabilityType: 'ongoing', imageUrls: [] },
     { id: L_HANDYMAN, memberId: JAKE_M_ID, type: 'offering', title: 'General Handyman Service (2 hrs)', description: 'Two hours of handyman work: minor plumbing, drywall patching, door adjustments, shelf mounting, fixture installs. Bring your own materials or I can source them.', category: 'home', creditPrice: 30, availabilityType: 'ongoing', imageUrls: [] },
 
     // Priya — wellness
-    { id: L_YOGA, memberId: PRIYA_ID, type: 'offering', title: 'Vinyasa Yoga Private Session', description: 'One-hour private vinyasa flow session tailored to your level. I bring mats and blocks. We can do it at your place, my studio, or outdoors at TC Jester Park.', category: 'wellness', creditPrice: 25, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_YOGA, memberId: PRIYA_ID, type: 'offering', title: 'Vinyasa Yoga Private Session', description: 'One-hour private vinyasa flow session tailored to your level. I bring mats and blocks. We can do it at your place, my studio, or outdoors at the Friendswood Park Pavilion.', category: 'wellness', creditPrice: 25, availabilityType: 'ongoing', imageUrls: [] },
     { id: L_MEDITATION, memberId: PRIYA_ID, type: 'offering', title: 'Guided Meditation (30 min)', description: 'A calming 30-minute guided meditation session. Great for stress relief, better sleep, or just a reset. Beginners absolutely welcome.', category: 'wellness', creditPrice: 12, availabilityType: 'ongoing', imageUrls: [] },
 
     // Marcus — services
@@ -558,19 +931,19 @@ async function seed() {
     { id: L_FINANCE, memberId: MARCUS_ID, type: 'offering', title: 'Personal Budget Coaching (1 hr)', description: 'Sit down with me for an hour and we will build a realistic budget that actually works. I help with debt payoff strategies, savings goals, and cutting unnecessary expenses.', category: 'services', creditPrice: 20, availabilityType: 'ongoing', imageUrls: [] },
 
     // Sarah — classes / food
-    { id: L_SOURDOUGH_CLS, memberId: SARAH_ID, type: 'offering', title: 'Sourdough Bread Baking Class', description: 'Small-group class (max 4 people) in my kitchen on De Milo. You will learn to feed a starter, shape a boule, and bake in a Dutch oven. You go home with a fresh loaf and your own starter.', category: 'classes', creditPrice: 20, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_SOURDOUGH_CLS, memberId: SARAH_ID, type: 'offering', title: 'Sourdough Bread Baking Class', description: 'Small-group class (max 4 people) in my Friendswood kitchen. You will learn to feed a starter, shape a boule, and bake in a Dutch oven. You go home with a fresh loaf and your own starter.', category: 'classes', creditPrice: 20, availabilityType: 'ongoing', imageUrls: [] },
     { id: L_BREAD, memberId: SARAH_ID, type: 'offering', title: 'Homemade Sourdough Bread (loaf)', description: 'One large sourdough boule, baked fresh. Crispy crust, chewy crumb. Available Tuesdays, Thursdays, and Saturdays. Message to reserve — they go fast.', category: 'food', creditPrice: 8, availabilityType: 'ongoing', imageUrls: [] },
 
     // David — services
-    { id: L_BIKE, memberId: DAVID_ID, type: 'offering', title: 'Bicycle Tune-Up & Repair', description: 'Full tune-up: brakes, gears, chain, tire pressure, wheel true. I also do flat fixes, cable replacements, and brake pad swaps. Drop off at my garage on Wakefield.', category: 'services', creditPrice: 15, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_BIKE, memberId: DAVID_ID, type: 'offering', title: 'Bicycle Tune-Up & Repair', description: 'Full tune-up: brakes, gears, chain, tire pressure, wheel true. I also do flat fixes, cable replacements, and brake pad swaps. Drop off at my garage in Friendswood.', category: 'services', creditPrice: 15, availabilityType: 'ongoing', imageUrls: [] },
     { id: L_WOODWORK, memberId: DAVID_ID, type: 'offering', title: 'Custom Cutting Board (reclaimed wood)', description: 'Handmade cutting board from reclaimed oak or walnut. Each one is unique. Great as a gift or for your own kitchen. Takes about a week to complete.', category: 'handmade', creditPrice: 25, availabilityType: 'ongoing', imageUrls: [] },
 
     // Aisha — wellness
     { id: L_TAROT, memberId: AISHA_ID, type: 'offering', title: 'Tarot Reading (30 min)', description: 'A 30-minute intuitive tarot session. We will pull cards together and explore what is showing up for you — career, relationships, personal growth. No spooky stuff, just honest reflection.', category: 'wellness', creditPrice: 20, availabilityType: 'ongoing', imageUrls: [] },
-    { id: L_ENERGY, memberId: AISHA_ID, type: 'offering', title: 'Reiki Energy Healing Session', description: 'One-hour Reiki session to promote relaxation and energetic balance. Done in person at my home studio in the Heights. Comfortable clothing recommended.', category: 'wellness', creditPrice: 30, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_ENERGY, memberId: AISHA_ID, type: 'offering', title: 'Reiki Energy Healing Session', description: 'One-hour Reiki session to promote relaxation and energetic balance. Done in person at my home studio in Pearland. Comfortable clothing recommended.', category: 'wellness', creditPrice: 30, availabilityType: 'ongoing', imageUrls: [] },
 
     // Tom — services
-    { id: L_PHOTO, memberId: TOM_ID, type: 'offering', title: 'Family Portrait Session (1 hr)', description: 'One-hour photo session at a location of your choice — your backyard, a park, or around the Heights. You get 20+ edited digital photos within a week.', category: 'services', creditPrice: 35, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_PHOTO, memberId: TOM_ID, type: 'offering', title: 'Family Portrait Session (1 hr)', description: 'One-hour photo session at a location of your choice — your backyard, a park, or around Pearland. You get 20+ edited digital photos within a week.', category: 'services', creditPrice: 35, availabilityType: 'ongoing', imageUrls: [] },
     { id: L_DRONE, memberId: TOM_ID, type: 'offering', title: 'Drone Aerial Photography', description: 'FAA Part 107 licensed drone pilot. Aerial photos and video for real estate, events, or just because your property looks incredible from above. Edited footage delivered in 48 hours.', category: 'services', creditPrice: 40, availabilityType: 'ongoing', imageUrls: [] },
 
     // Linda — skills / kids
@@ -578,11 +951,11 @@ async function seed() {
     { id: L_SCI_TUTOR, memberId: LINDA_ID, type: 'offering', title: 'Science Tutoring (1 hour)', description: 'Biology and chemistry tutoring for middle and high school students. Lab report help, test prep, and concept review. Patient, thorough, and encouraging.', category: 'kids', creditPrice: 25, availabilityType: 'ongoing', imageUrls: [] },
 
     // Ben — services
-    { id: L_DOG_WALK, memberId: BEN_ID, type: 'offering', title: 'Dog Walking (per walk)', description: '30-minute walk in the Oak Forest neighborhood. I pick up, walk, and return your pup. Can handle up to 2 dogs at once. Rain or shine — your dog needs exercise.', category: 'services', creditPrice: 10, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_DOG_WALK, memberId: BEN_ID, type: 'offering', title: 'Dog Walking (per walk)', description: '30-minute walk in the Friendswood neighborhood. I pick up, walk, and return your pup. Can handle up to 2 dogs at once. Rain or shine — your dog needs exercise.', category: 'services', creditPrice: 10, availabilityType: 'ongoing', imageUrls: [] },
     { id: L_PET_SIT, memberId: BEN_ID, type: 'offering', title: 'Pet Sitting (overnight)', description: 'Overnight pet sitting at your home. I feed, walk, play, and send photo updates. Cats, dogs, and small animals welcome. Fully insured through a pet-sitting network.', category: 'services', creditPrice: 30, availabilityType: 'ongoing', imageUrls: [] },
 
     // Rosa — food / home
-    { id: L_HERB_KIT, memberId: ROSA_ID, type: 'offering', title: 'Fresh Herb Starter Kit', description: 'Four potted herb starters: basil, cilantro, rosemary, and mint. Grown in my garden, ready for yours. Includes care instructions and soil tips for Houston clay.', category: 'food', creditPrice: 10, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_HERB_KIT, memberId: ROSA_ID, type: 'offering', title: 'Fresh Herb Starter Kit', description: 'Four potted herb starters: basil, cilantro, rosemary, and mint. Grown in my garden, ready for yours. Includes care instructions and soil tips for Friendswood clay.', category: 'food', creditPrice: 10, availabilityType: 'ongoing', imageUrls: [] },
     { id: L_GARDEN, memberId: ROSA_ID, type: 'offering', title: 'Garden Setup Consultation', description: 'I visit your yard, assess sun, soil, and space, and give you a planting plan for vegetables, herbs, or flowers. Includes a written plan and a follow-up check-in after 2 weeks.', category: 'home', creditPrice: 20, availabilityType: 'ongoing', imageUrls: [] },
 
     // James — home
@@ -594,7 +967,7 @@ async function seed() {
     { id: L_ARABIC, memberId: FATIMA_ID, type: 'offering', title: 'Conversational Arabic Tutoring', description: 'One-hour conversational Arabic lesson for beginners. We cover greetings, common phrases, and pronunciation. Great for travel prep or connecting with Arabic-speaking neighbors.', category: 'skills', creditPrice: 25, availabilityType: 'ongoing', imageUrls: [] },
 
     // Chris — classes
-    { id: L_GUITAR, memberId: CHRIS_ID, type: 'offering', title: 'Guitar Lessons (Beginner)', description: 'One-hour guitar lesson at my home studio in the Heights. Acoustic or electric. We start with chords, strumming patterns, and your first song. All ages welcome.', category: 'classes', creditPrice: 25, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_GUITAR, memberId: CHRIS_ID, type: 'offering', title: 'Guitar Lessons (Beginner)', description: 'One-hour guitar lesson at my home studio in Pearland. Acoustic or electric. We start with chords, strumming patterns, and your first song. All ages welcome.', category: 'classes', creditPrice: 25, availabilityType: 'ongoing', imageUrls: [] },
     { id: L_MUSIC_PROD, memberId: CHRIS_ID, type: 'offering', title: 'Home Recording Session (2 hrs)', description: 'Two hours in my home studio to record vocals, guitar, or a simple demo. I handle the mixing and give you a polished track within a week. Bring your song, I will bring the sound.', category: 'services', creditPrice: 35, availabilityType: 'ongoing', imageUrls: [] },
 
     // Diana — services
@@ -606,22 +979,205 @@ async function seed() {
     { id: L_TECH_SUPPORT, memberId: OMAR_ID, type: 'offering', title: 'Home Tech Support (1 hr)', description: 'One hour of tech help: WiFi setup, printer issues, phone transfers, smart home devices, computer tune-ups. No question is too basic — I am patient and I speak human.', category: 'tech', creditPrice: 15, availabilityType: 'ongoing', imageUrls: [] },
 
     // Elijah — wellness
-    { id: L_TRAINING, memberId: ELIJAH_ID, type: 'offering', title: 'Personal Training Session (1 hr)', description: 'One-hour personal training session at TC Jester Park or your home. Strength, cardio, flexibility — customized to your goals. NASM certified. All fitness levels.', category: 'wellness', creditPrice: 30, availabilityType: 'ongoing', imageUrls: [] },
-    { id: L_NUTRITION, memberId: ELIJAH_ID, type: 'offering', title: 'Custom Meal Plan & Nutrition Coaching', description: 'A personalized weekly meal plan based on your goals, preferences, and budget. Includes a 30-minute coaching call and grocery list. Houston grocery stores in mind.', category: 'wellness', creditPrice: 20, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_TRAINING, memberId: ELIJAH_ID, type: 'offering', title: 'Personal Training Session (1 hr)', description: 'One-hour personal training session at the Friendswood Park Pavilion or your home. Strength, cardio, flexibility — customized to your goals. NASM certified. All fitness levels.', category: 'wellness', creditPrice: 30, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_NUTRITION, memberId: ELIJAH_ID, type: 'offering', title: 'Custom Meal Plan & Nutrition Coaching', description: 'A personalized weekly meal plan based on your goals, preferences, and budget. Includes a 30-minute coaching call and grocery list. Friendswood grocery stores in mind.', category: 'wellness', creditPrice: 20, availabilityType: 'ongoing', imageUrls: [] },
 
     // Lauren — offerings and needs
-    { id: L_LAUREN_OFFER, memberId: LAUREN_ID, type: 'offering', title: 'Neighborhood Welcome Package', description: 'I put together a welcome package for new Oak Forest neighbors: local restaurant recommendations, park guide, school info, a hand-written note, and an intro to the xChangeMakers community.', category: 'other', creditPrice: 5, availabilityType: 'ongoing', imageUrls: [] },
-    { id: L_LAUREN_NEED, memberId: LAUREN_ID, type: 'need', title: 'Looking for Someone to Help with Moving', description: 'My friend is moving into a house on Lamonte Lane next weekend. Need 2-3 strong people to help load and unload a U-Haul. Should take about 3-4 hours. Happy to provide lunch and TU.', category: 'services', creditPrice: 25, availabilityType: 'one_time', imageUrls: [] },
+    { id: L_LAUREN_OFFER, memberId: LAUREN_ID, type: 'offering', title: 'Neighborhood Welcome Package', description: 'I put together a welcome package for new Friendswood neighbors: local restaurant recommendations, park guide, school info, a hand-written note, and an intro to the xChangeMakers community.', category: 'other', creditPrice: 5, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_LAUREN_NEED, memberId: LAUREN_ID, type: 'need', title: 'Looking for Someone to Help with Moving', description: 'My friend is moving into a house on Lamonte Lane next weekend. Need 2-3 strong people to help load and unload a U-Haul. Should take about 3-4 hours. Happy to provide lunch and TU.', category: 'services', creditPrice: 25, availabilityType: 'one_time', needStatus: 'offered', publicLocationLabel: 'Lamonte Lane area', isUrgent: false, imageUrls: [] },
 
     // Need listings from various members
-    { id: L_NEED_MOVING, memberId: JAKE_M_ID, type: 'need', title: 'Need Help Hauling Old Fence Lumber', description: 'I just tore down my back fence and have a truck-bed worth of old cedar to haul to the dump. Need one more person with a truck or strong back for about 2 hours.', category: 'services', creditPrice: 20, availabilityType: 'one_time', imageUrls: [] },
-    { id: L_NEED_TUTOR, memberId: TOM_ID, type: 'need', title: 'Need Math Tutor for My 8th Grader', description: 'My daughter is struggling with pre-algebra and has a big test coming up. Looking for someone patient who can make math click. Weekday afternoons preferred.', category: 'kids', creditPrice: 25, availabilityType: 'ongoing', imageUrls: [] },
-    { id: L_NEED_CAKE, memberId: AISHA_ID, type: 'need', title: 'Looking for Homemade Birthday Cake', description: 'My mom turns 65 next Saturday. Looking for someone who can bake a beautiful homemade cake — vanilla or carrot cake preferred. Nothing fancy, just made with love.', category: 'food', creditPrice: 25, availabilityType: 'one_time', imageUrls: [] },
-    { id: L_NEED_WIFI, memberId: MARCUS_ID, type: 'need', title: 'Need Help Setting Up Home WiFi', description: 'Just got a new mesh WiFi system and have no idea how to set it up. Three access points, lots of dead zones to fix. Need someone who actually knows networking.', category: 'tech', creditPrice: 15, availabilityType: 'one_time', imageUrls: [] },
-    { id: L_NEED_SPANISH, memberId: BEN_ID, type: 'need', title: 'Looking for Spanish Conversation Partner', description: 'I took Spanish in high school and want to practice again. Looking for a native speaker to do casual conversation over coffee once a week. I can trade dog walking or pet sitting.', category: 'skills', creditPrice: 10, availabilityType: 'ongoing', imageUrls: [] },
+    { id: L_NEED_MOVING, memberId: JAKE_M_ID, type: 'need', title: 'Need Help Hauling Old Fence Lumber', description: 'I just tore down my back fence and have a truck-bed worth of old cedar to haul to the dump. Need one more person with a truck or strong back for about 2 hours.', category: 'services', creditPrice: 20, availabilityType: 'one_time', needStatus: 'live', publicLocationLabel: 'Friendswood west side', isUrgent: true, imageUrls: [] },
+    { id: L_NEED_TUTOR, memberId: TOM_ID, type: 'need', title: 'Need Math Tutor for My 8th Grader', description: 'My daughter is struggling with pre-algebra and has a big test coming up. Looking for someone patient who can make math click. Weekday afternoons preferred.', category: 'kids', creditPrice: 25, availabilityType: 'ongoing', needStatus: 'live', publicLocationLabel: 'West Friendswood / Friendswood', recurringNote: 'Weekly after school if it is a good fit.', imageUrls: [] },
+    { id: L_NEED_CAKE, memberId: AISHA_ID, type: 'need', title: 'Looking for Homemade Birthday Cake', description: 'My mom turns 65 next Saturday. Looking for someone who can bake a beautiful homemade cake — vanilla or carrot cake preferred. Nothing fancy, just made with love.', category: 'food', creditPrice: 25, availabilityType: 'one_time', needStatus: 'live', publicLocationLabel: 'Pearland pickup area', imageUrls: [] },
+    { id: L_NEED_WIFI, memberId: MARCUS_ID, type: 'need', title: 'Need Help Setting Up Home WiFi', description: 'Just got a new mesh WiFi system and have no idea how to set it up. Three access points, lots of dead zones to fix. Need someone who actually knows networking.', category: 'tech', creditPrice: 15, availabilityType: 'one_time', needStatus: 'live', publicLocationLabel: 'Friendswood north side', isUrgent: true, imageUrls: [] },
+    { id: L_NEED_SPANISH, memberId: BEN_ID, type: 'need', title: 'Looking for Spanish Conversation Partner', description: 'I took Spanish in high school and want to practice again. Looking for a native speaker to do casual conversation over coffee once a week. I can trade dog walking or pet sitting.', category: 'skills', creditPrice: 10, availabilityType: 'ongoing', needStatus: 'live', publicLocationLabel: 'Friendswood Coffee & Books', recurringNote: 'Open to a weekly rhythm.', imageUrls: [] },
   ])
 
   console.log('  38 listings inserted.')
+
+  // ── 3b. Timed Needs & Helper Preferences ────────────────────────────────
+  console.log('Inserting timed needs and helper preferences...')
+
+  const urgentFenceStart = hoursFromNow(2)
+  const urgentFenceEnd = hoursFromNow(4)
+  const wifiStart = hoursFromNow(1)
+  const wifiEnd = hoursFromNow(2)
+
+  await db.insert(schema.needWindows).values([
+    {
+      id: NW_LAUREN_MOVE,
+      needId: L_LAUREN_NEED,
+      startsAt: atRelativeDay(2, 14),
+      endsAt: atRelativeDay(2, 17),
+      label: 'Preferred moving window',
+      isFlexible: false,
+      status: 'offered',
+    },
+    {
+      id: NW_FENCE_LUMBER,
+      needId: L_NEED_MOVING,
+      startsAt: urgentFenceStart,
+      endsAt: urgentFenceEnd,
+      label: 'Today before sunset',
+      isFlexible: true,
+      status: 'open',
+    },
+    {
+      id: NW_MATH_TUTOR,
+      needId: L_NEED_TUTOR,
+      startsAt: atRelativeDay(3, 16),
+      endsAt: atRelativeDay(3, 17),
+      label: 'After school',
+      isFlexible: true,
+      status: 'open',
+    },
+    {
+      id: NW_MATH_TUTOR_ALT,
+      needId: L_NEED_TUTOR,
+      startsAt: atRelativeDay(4, 18, 30),
+      endsAt: atRelativeDay(4, 19, 30),
+      label: 'Backup evening option',
+      isFlexible: true,
+      status: 'open',
+    },
+    {
+      id: NW_CAKE,
+      needId: L_NEED_CAKE,
+      startsAt: atRelativeDay(5, 10),
+      endsAt: atRelativeDay(5, 12),
+      label: 'Pickup window',
+      isFlexible: false,
+      status: 'open',
+    },
+    {
+      id: NW_WIFI,
+      needId: L_NEED_WIFI,
+      startsAt: wifiStart,
+      endsAt: wifiEnd,
+      label: 'ASAP setup help',
+      isFlexible: true,
+      status: 'open',
+    },
+    {
+      id: NW_SPANISH,
+      needId: L_NEED_SPANISH,
+      startsAt: atRelativeDay(4, 9),
+      endsAt: atRelativeDay(4, 10),
+      label: 'Coffee practice',
+      isFlexible: true,
+      status: 'open',
+    },
+  ])
+
+  await db.insert(schema.needOffers).values([
+    {
+      id: NO_DAVID_MOVE,
+      needId: L_LAUREN_NEED,
+      windowId: NW_LAUREN_MOVE,
+      helperId: DAVID_ID,
+      message: 'I can bring a dolly and help with loading.',
+      status: 'offered',
+    },
+    {
+      id: NO_JAMES_MOVE,
+      needId: L_LAUREN_NEED,
+      windowId: NW_LAUREN_MOVE,
+      helperId: JAMES_ID,
+      message: 'Available for the full window and can handle heavy furniture.',
+      status: 'offered',
+    },
+  ])
+
+  await db.insert(schema.helperPreferences).values([
+    {
+      memberId: LAUREN_ID,
+      categories: ['services', 'kids', 'home', 'other'],
+      radiusMiles: 10,
+      urgentOnly: false,
+      digestFrequency: 'daily',
+      quietHoursStart: '21:00',
+      quietHoursEnd: '07:00',
+    },
+    {
+      memberId: DAVID_ID,
+      categories: ['services', 'home', 'tech'],
+      radiusMiles: 8,
+      urgentOnly: false,
+      digestFrequency: 'immediate',
+    },
+    {
+      memberId: LINDA_ID,
+      categories: ['kids', 'skills', 'classes'],
+      radiusMiles: 6,
+      urgentOnly: false,
+      digestFrequency: 'daily',
+    },
+    {
+      memberId: MARIA_ID,
+      categories: ['food', 'services'],
+      radiusMiles: 5,
+      urgentOnly: false,
+      digestFrequency: 'weekly',
+    },
+    {
+      memberId: OMAR_ID,
+      categories: ['tech', 'services'],
+      radiusMiles: 12,
+      urgentOnly: true,
+      digestFrequency: 'immediate',
+    },
+  ])
+
+  await db.insert(schema.memberIntentProfiles).values([
+    {
+      memberId: LAUREN_ID,
+      canHelpCategories: ['services', 'kids', 'home', 'other'],
+      needsHelpCategories: ['services', 'home', 'food'],
+      happeningInterests: ['community', 'social', 'exchange_event', 'food'],
+      radiusMiles: 10,
+      notificationFrequency: 'daily',
+      shareAvailability: true,
+    },
+    {
+      memberId: DAVID_ID,
+      canHelpCategories: ['services', 'home', 'tech'],
+      needsHelpCategories: ['food', 'classes'],
+      happeningInterests: ['markets', 'classes', 'community'],
+      radiusMiles: 5,
+      notificationFrequency: 'immediate',
+      shareAvailability: true,
+    },
+    {
+      memberId: PRIYA_ID,
+      canHelpCategories: ['wellness', 'classes'],
+      needsHelpCategories: ['food', 'home'],
+      happeningInterests: ['fitness', 'classes', 'social'],
+      radiusMiles: 10,
+      notificationFrequency: 'daily',
+      shareAvailability: true,
+    },
+    {
+      memberId: OMAR_ID,
+      canHelpCategories: ['tech', 'services'],
+      needsHelpCategories: ['home', 'services'],
+      happeningInterests: ['classes', 'exchange_event'],
+      radiusMiles: 10,
+      notificationFrequency: 'weekly',
+      shareAvailability: true,
+    },
+    {
+      memberId: LINDA_ID,
+      canHelpCategories: ['kids', 'skills', 'classes'],
+      needsHelpCategories: ['tech', 'home'],
+      happeningInterests: ['kids', 'community', 'classes'],
+      radiusMiles: 15,
+      notificationFrequency: 'daily',
+      shareAvailability: true,
+    },
+  ])
+
+  console.log('  7 timed need windows, 2 helper offers, 5 helper preference rows, 5 intent profiles inserted.')
 
   // ── 4. Exchanges ────────────────────────────────────────────────────────
   console.log('Inserting exchanges...')
@@ -771,6 +1327,11 @@ async function seed() {
   console.log('Inserting availability slots...')
 
   await db.insert(schema.availabilitySlots).values([
+    // Lauren: beta coordinator availability
+    { memberId: LAUREN_ID, dayOfWeek: 2, startTime: '14:00', endTime: '20:00', isRecurring: true },
+    { memberId: LAUREN_ID, dayOfWeek: 4, startTime: '17:00', endTime: '20:00', isRecurring: true },
+    { memberId: LAUREN_ID, dayOfWeek: 6, startTime: '10:00', endTime: '13:00', isRecurring: true },
+
     // Priya: Mon/Wed/Fri mornings, Tue/Thu evenings
     { memberId: PRIYA_ID, dayOfWeek: 1, startTime: '06:00', endTime: '09:00', isRecurring: true },
     { memberId: PRIYA_ID, dayOfWeek: 3, startTime: '06:00', endTime: '09:00', isRecurring: true },
@@ -829,14 +1390,14 @@ async function seed() {
     { memberId: ELIJAH_ID, dayOfWeek: 3, startTime: '17:00', endTime: '20:00', isRecurring: true },
   ])
 
-  console.log('  40 availability slots inserted.')
+  console.log('  43 availability slots inserted.')
 
   // ── 7. Reviews ──────────────────────────────────────────────────────────
   console.log('Inserting reviews...')
 
   await db.insert(schema.reviews).values([
     // Lauren reviewed Maria (tamale exchange)
-    { id: REV_LAUREN_MARIA, exchangeId: EX_LAUREN_TAMALES, reviewerId: LAUREN_ID, revieweeId: MARIA_ID, note: 'Best tamales in Oak Forest! My family devoured them in one sitting. Maria is so warm and the quality is unbelievable.' },
+    { id: REV_LAUREN_MARIA, exchangeId: EX_LAUREN_TAMALES, reviewerId: LAUREN_ID, revieweeId: MARIA_ID, note: 'Best tamales in Friendswood! My family devoured them in one sitting. Maria is so warm and the quality is unbelievable.' },
     // Maria reviewed Lauren (on a separate exchange — unique constraint on exchange_id)
     { id: REV_MARIA_LAUREN, exchangeId: EX_TAMALE_REVERSE, reviewerId: MARIA_ID, revieweeId: LAUREN_ID, note: 'Lauren is the sweetest. She picked up right on time and even brought me a sourdough loaf from Sarah. Love this community.' },
     // Sarah reviewed David (bike exchange)
@@ -908,10 +1469,10 @@ async function seed() {
     {
       id: HAP_EXCHANGE,
       hostId: LAUREN_ID,
-      title: 'Oak Forest Exchange Event',
+      title: 'Friendswood Exchange Event',
       description: 'Our monthly neighborhood exchange! Bring your offerings, browse what your neighbors have, and meet new faces. Tamales, bread, handmade goods, and services all welcome. Everyone gets 1 bonus TU for attending.',
       category: 'exchange_event',
-      location: 'Oak Forest Park — 2100 Judiway St, Houston, TX 77018',
+      location: 'Friendswood Community Park — Friendswood, TX 77546',
       latitude: '29.8088',
       longitude: '-95.3968',
       startAt: thisSaturday,
@@ -920,10 +1481,10 @@ async function seed() {
     {
       id: HAP_FARMERS,
       hostId: ROSA_ID,
-      title: 'Heights Farmers Market',
-      description: 'Weekly farmers market in the Heights. Local produce, herbs, honey, baked goods, and artisan products. Several xChangeMakers members will have booths — look for the TU sign to exchange time!',
+      title: 'Pearland Farmers Market',
+      description: 'Weekly farmers market in Pearland. Local produce, herbs, honey, baked goods, and artisan products. Several xChangeMakers members will have booths — look for the TU sign to exchange time!',
       category: 'markets',
-      location: 'Heights Mercantile — 714 Yale St, Houston, TX 77007',
+      location: 'Bay Area Farmers Market — Friendswood, TX 77546',
       latitude: '29.7925',
       longitude: '-95.3977',
       startAt: nextSunday,
@@ -933,9 +1494,9 @@ async function seed() {
       id: HAP_YOGA,
       hostId: PRIYA_ID,
       title: 'Morning Yoga in the Park',
-      description: 'Free community yoga class in TC Jester Park. All levels welcome — I bring extra mats. We will do 45 minutes of vinyasa flow followed by 15 minutes of guided meditation. Meet by the pavilion.',
+      description: 'Free community yoga class at the Friendswood Park Pavilion. All levels welcome — I bring extra mats. We will do 45 minutes of vinyasa flow followed by 15 minutes of guided meditation. Meet by the pavilion.',
       category: 'fitness',
-      location: 'TC Jester Park — 4201 TC Jester Blvd, Houston, TX 77018',
+      location: 'Friendswood Park Pavilion — 4201 S Friendswood Dr, Friendswood, TX 77546',
       latitude: '29.8120',
       longitude: '-95.4135',
       startAt: tomorrow,
@@ -945,9 +1506,9 @@ async function seed() {
       id: HAP_KIDS,
       hostId: LINDA_ID,
       title: 'Kids Craft & Play Day',
-      description: 'A fun Saturday morning for kids ages 4-12. Arts and crafts, outdoor games, and a snack table. Parents welcome to stay and mingle. Hosted at the Oak Forest Community Center.',
+      description: 'A fun Saturday morning for kids ages 4-12. Arts and crafts, outdoor games, and a snack table. Parents welcome to stay and mingle. Hosted at the Friendswood Community Center.',
       category: 'kids',
-      location: 'Oak Forest Community Center — 1700 Lamonte Ln, Houston, TX 77018',
+      location: 'Friendswood Community Center — 1700 Lamonte Ln, Friendswood, TX 77546',
       latitude: '29.8105',
       longitude: '-95.3952',
       startAt: nextSaturday,
@@ -957,9 +1518,9 @@ async function seed() {
       id: HAP_SOURDOUGH,
       hostId: SARAH_ID,
       title: 'Intro to Sourdough',
-      description: 'Small-group class (max 6) at my kitchen on De Milo. You will learn to create and feed a starter, shape your dough, and score it. Take home a fresh loaf and your own starter. Bring an apron!',
+      description: 'Small-group class (max 6) at my Friendswood kitchen. You will learn to create and feed a starter, shape your dough, and score it. Take home a fresh loaf and your own starter. Bring an apron!',
       category: 'classes',
-      location: 'Sarah\'s Kitchen — De Milo Dr, Oak Forest, Houston, TX 77018',
+      location: 'Sarah\'s Kitchen — Friendswood, TX 77546',
       latitude: '29.8100',
       longitude: '-95.4010',
       startAt: nextWednesday,
@@ -968,10 +1529,10 @@ async function seed() {
     {
       id: HAP_CLEANUP,
       hostId: LAUREN_ID,
-      title: 'Oak Forest Community Cleanup',
+      title: 'Friendswood Community Cleanup',
       description: 'Quarterly neighborhood cleanup. We will walk the streets, pick up litter, trim overgrown sidewalk edges, and beautify our community. Bags, gloves, and water provided. Earn 2 TU for participating!',
       category: 'community',
-      location: 'Meet at Oak Forest Park — 2100 Judiway St, Houston, TX 77018',
+      location: 'Meet at Friendswood Community Park — Friendswood, TX 77546',
       latitude: '29.8088',
       longitude: '-95.3968',
       startAt: daysFromNow(10),
@@ -983,7 +1544,7 @@ async function seed() {
       title: 'Book Swap Social',
       description: 'Bring a book, take a book. We will set up tables at Slowpokes Coffee, swap reads, and chat about what we have been reading. All genres welcome. Tea and pastries available for purchase.',
       category: 'social',
-      location: 'Slowpokes Espresso Bar — 1401 Ella Blvd, Houston, TX 77008',
+      location: 'Friendswood Coffee & Books — Friendswood, TX 77546',
       latitude: '29.8025',
       longitude: '-95.4035',
       startAt: daysFromNow(8),
@@ -997,7 +1558,7 @@ async function seed() {
   console.log('Inserting RSVPs...')
 
   await db.insert(schema.happeningRsvps).values([
-    // Oak Forest Exchange Event (8 RSVPs)
+    // Friendswood Exchange Event (8 RSVPs)
     { happeningId: HAP_EXCHANGE, memberId: LAUREN_ID, status: 'going' },
     { happeningId: HAP_EXCHANGE, memberId: MARIA_ID, status: 'going' },
     { happeningId: HAP_EXCHANGE, memberId: SARAH_ID, status: 'going' },
@@ -1007,7 +1568,7 @@ async function seed() {
     { happeningId: HAP_EXCHANGE, memberId: JAMES_ID, status: 'interested' },
     { happeningId: HAP_EXCHANGE, memberId: ELIJAH_ID, status: 'going' },
 
-    // Heights Farmers Market (5 RSVPs)
+    // Pearland Farmers Market (5 RSVPs)
     { happeningId: HAP_FARMERS, memberId: ROSA_ID, status: 'going' },
     { happeningId: HAP_FARMERS, memberId: LAUREN_ID, status: 'going' },
     { happeningId: HAP_FARMERS, memberId: MARIA_ID, status: 'going' },
@@ -1051,7 +1612,250 @@ async function seed() {
 
   console.log('  37 RSVPs inserted.')
 
-  // ── 11. Activity Feed ──────────────────────────────────────────────────
+  // ── 11. Notifications ──────────────────────────────────────────────────
+  console.log('Inserting notifications...')
+
+  await db.insert(schema.notifications).values([
+    {
+      memberId: LAUREN_ID,
+      type: 'offer_received',
+      priority: 'high',
+      title: 'David can help with moving boxes',
+      body: 'David offered to help during your preferred moving window.',
+      targetPath: '/needs',
+      createdAt: hoursFromNow(-1),
+    },
+    {
+      memberId: LAUREN_ID,
+      type: 'matched_need',
+      priority: 'normal',
+      title: 'Yard work need matches your preferences',
+      body: 'A neighbor needs help with plants and outdoor cleanup this week.',
+      targetPath: '/needs?category=home',
+      createdAt: hoursFromNow(-4),
+    },
+    {
+      memberId: LAUREN_ID,
+      type: 'event_match',
+      priority: 'normal',
+      title: 'Garden event nearby',
+      body: 'The farmers market and garden meetup are active this week.',
+      targetPath: '/happenings?category=markets',
+      createdAt: daysAgo(1),
+    },
+    {
+      memberId: LAUREN_ID,
+      type: 'schedule_reminder',
+      priority: 'high',
+      title: 'Yoga exchange tomorrow',
+      body: 'Your session with Priya is coming up. Open the exchange room for details.',
+      targetPath: `/exchange/${EX_LAUREN_YOGA}`,
+      createdAt: daysAgo(1),
+      readAt: daysAgo(1),
+    },
+    {
+      memberId: DAVID_ID,
+      type: 'offer_accepted',
+      priority: 'high',
+      title: 'Lauren accepted your moving help',
+      body: 'Your offer is queued for the moving boxes need.',
+      targetPath: '/needs',
+      createdAt: hoursFromNow(-2),
+    },
+    {
+      memberId: PRIYA_ID,
+      type: 'completion_prompt',
+      priority: 'normal',
+      title: 'Close the loop after yoga',
+      body: 'After the session, mark the exchange complete so credits and reviews stay current.',
+      targetPath: `/exchange/${EX_LAUREN_YOGA}`,
+      createdAt: hoursFromNow(-6),
+    },
+  ])
+
+  console.log('  6 notifications inserted.')
+
+  // ── 12. Analytics Events ────────────────────────────────────────────────
+  console.log('Inserting analytics events...')
+
+  await db.insert(schema.analyticsEvents).values([
+    {
+      memberId: LAUREN_ID,
+      eventType: 'need_posted',
+      targetType: 'listing',
+      targetId: L_NEED_MOVING,
+      metadata: { category: 'services', isUrgent: false },
+      createdAt: daysAgo(5),
+    },
+    {
+      memberId: LAUREN_ID,
+      eventType: 'need_posted',
+      targetType: 'listing',
+      targetId: L_DOG_WALK,
+      metadata: { category: 'kids', isUrgent: true },
+      createdAt: daysAgo(2),
+    },
+    {
+      memberId: SARAH_ID,
+      eventType: 'need_posted',
+      targetType: 'listing',
+      targetId: L_NEED_WIFI,
+      metadata: { category: 'tech', isUrgent: false },
+      createdAt: daysAgo(3),
+    },
+    {
+      memberId: BEN_ID,
+      eventType: 'need_posted',
+      targetType: 'listing',
+      targetId: L_NEED_SPANISH,
+      metadata: { category: 'home', isUrgent: false },
+      createdAt: daysAgo(1),
+    },
+    {
+      memberId: DAVID_ID,
+      eventType: 'helper_offer_submitted',
+      targetType: 'listing',
+      targetId: L_NEED_MOVING,
+      metadata: { category: 'services' },
+      createdAt: hoursFromNow(-20),
+    },
+    {
+      memberId: PRIYA_ID,
+      eventType: 'helper_offer_submitted',
+      targetType: 'listing',
+      targetId: L_DOG_WALK,
+      metadata: { category: 'kids' },
+      createdAt: hoursFromNow(-18),
+    },
+    {
+      memberId: LAUREN_ID,
+      eventType: 'offer_accepted',
+      targetType: 'exchange',
+      targetId: EX_LAUREN_YOGA,
+      metadata: { needId: L_YOGA, helperId: PRIYA_ID },
+      createdAt: daysAgo(1),
+    },
+    {
+      memberId: MARIA_ID,
+      eventType: 'exchange_completed',
+      targetType: 'exchange',
+      targetId: EX_LAUREN_TAMALES,
+      metadata: { category: 'food' },
+      createdAt: daysAgo(4),
+    },
+    {
+      memberId: LAUREN_ID,
+      eventType: 'filter_applied',
+      targetType: 'needs',
+      metadata: { category: 'home', timeframe: 'week' },
+      createdAt: hoursFromNow(-7),
+    },
+    {
+      memberId: DAVID_ID,
+      eventType: 'filter_applied',
+      targetType: 'needs',
+      metadata: { category: 'services', urgentOnly: true },
+      createdAt: hoursFromNow(-5),
+    },
+    {
+      memberId: LAUREN_ID,
+      eventType: 'event_rsvp',
+      targetType: 'happening',
+      targetId: HAP_FARMERS,
+      metadata: { status: 'going' },
+      createdAt: daysAgo(2),
+    },
+    {
+      memberId: PRIYA_ID,
+      eventType: 'event_rsvp',
+      targetType: 'happening',
+      targetId: HAP_YOGA,
+      metadata: { status: 'going' },
+      createdAt: daysAgo(2),
+    },
+    {
+      memberId: MARCUS_ID,
+      eventType: 'event_rsvp',
+      targetType: 'happening',
+      targetId: HAP_FARMERS,
+      metadata: { status: 'interested' },
+      createdAt: daysAgo(1),
+    },
+    {
+      memberId: LAUREN_ID,
+      eventType: 'need_viewed',
+      targetType: 'listing',
+      targetId: L_NEED_WIFI,
+      metadata: { category: 'home' },
+      createdAt: hoursFromNow(-3),
+    },
+    {
+      memberId: DAVID_ID,
+      eventType: 'need_viewed',
+      targetType: 'listing',
+      targetId: L_NEED_MOVING,
+      metadata: { category: 'services' },
+      createdAt: hoursFromNow(-2),
+    },
+    {
+      memberId: SARAH_ID,
+      eventType: 'business_fallback_clicked',
+      targetType: 'business',
+      metadata: { category: 'home_services', sourceNeedId: L_NEED_WIFI },
+      createdAt: hoursFromNow(-1),
+    },
+    {
+      memberId: BEN_ID,
+      eventType: 'business_fallback_clicked',
+      targetType: 'business',
+      metadata: { category: 'moving_help', sourceNeedId: L_NEED_MOVING },
+      createdAt: hoursFromNow(-8),
+    },
+    {
+      memberId: LAUREN_ID,
+      eventType: 'need_reposted',
+      targetType: 'listing',
+      targetId: L_NEED_MOVING,
+      metadata: { category: 'services' },
+      createdAt: daysAgo(1),
+    },
+    {
+      memberId: FATIMA_ID,
+      eventType: 'need_posted',
+      targetType: 'listing',
+      targetId: L_NEED_TUTOR,
+      metadata: { category: 'classes', isUrgent: false },
+      createdAt: daysAgo(2),
+    },
+    {
+      memberId: JAMES_ID,
+      eventType: 'helper_dropped',
+      targetType: 'listing',
+      targetId: L_NEED_WIFI,
+      metadata: { reason: 'schedule_conflict' },
+      createdAt: daysAgo(1),
+    },
+    {
+      memberId: MARIA_ID,
+      eventType: 'offer_withdrawn',
+      targetType: 'listing',
+      targetId: L_NEED_MOVING,
+      metadata: { reason: 'schedule_conflict' },
+      createdAt: hoursFromNow(-18),
+    },
+    {
+      memberId: AISHA_ID,
+      eventType: 'need_cancelled',
+      targetType: 'listing',
+      targetId: L_NEED_CAKE,
+      metadata: { reason: 'no_longer_needed' },
+      createdAt: daysAgo(2),
+    },
+  ])
+
+  console.log('  22 analytics events inserted.')
+
+  // ── 13. Activity Feed ──────────────────────────────────────────────────
   console.log('Inserting activity feed...')
 
   await db.insert(schema.activityFeed).values([
@@ -1062,7 +1866,7 @@ async function seed() {
     },
     {
       type: 'new_member',
-      data: { memberId: ELIJAH_ID, memberName: 'Elijah Banks', neighborhood: 'Garden Oaks' },
+      data: { memberId: ELIJAH_ID, memberName: 'Elijah Banks', neighborhood: 'West Friendswood' },
       createdAt: hoursFromNow(-8),
     },
     {
@@ -1072,17 +1876,17 @@ async function seed() {
     },
     {
       type: 'happening_posted',
-      data: { happeningId: HAP_EXCHANGE, title: 'Oak Forest Exchange Event', hostName: 'Lauren Chen', when: 'this Saturday' },
+      data: { happeningId: HAP_EXCHANGE, title: 'Friendswood Exchange Event', hostName: 'Lauren Chen', when: 'this Saturday' },
       createdAt: daysAgo(3),
     },
     {
       type: 'treasury_milestone',
-      data: { communityName: 'Oak Forest', amount: 7000, milestone: '$7,000' },
+      data: { communityName: 'Friendswood', amount: 7000, milestone: '$7,000' },
       createdAt: daysAgo(3),
     },
     {
       type: 'weekly_stats',
-      data: { exchangesThisWeek: 14, newMembers: 2, communityName: 'Oak Forest' },
+      data: { exchangesThisWeek: 14, newMembers: 2, communityName: 'Friendswood' },
       createdAt: daysAgo(1),
     },
     {
@@ -1107,7 +1911,7 @@ async function seed() {
     },
     {
       type: 'new_member',
-      data: { memberId: DIANA_ID, memberName: 'Diana Tran', neighborhood: 'Oak Forest' },
+      data: { memberId: DIANA_ID, memberName: 'Diana Tran', neighborhood: 'Friendswood' },
       createdAt: daysAgo(12),
     },
     {
@@ -1137,12 +1941,12 @@ async function seed() {
     },
     {
       type: 'weekly_stats',
-      data: { exchangesThisWeek: 11, newMembers: 3, communityName: 'Oak Forest' },
+      data: { exchangesThisWeek: 11, newMembers: 3, communityName: 'Friendswood' },
       createdAt: daysAgo(8),
     },
     {
       type: 'new_member',
-      data: { memberId: CHRIS_ID, memberName: 'Chris Morgan', neighborhood: 'Heights' },
+      data: { memberId: CHRIS_ID, memberName: 'Chris Morgan', neighborhood: 'Pearland' },
       createdAt: daysAgo(15),
     },
   ])
@@ -1154,8 +1958,8 @@ async function seed() {
 
   await db.insert(schema.treasury).values([
     {
-      id: TREASURY_OAK_FOREST,
-      communityName: 'Oak Forest',
+      id: TREASURY_FRIENDSWOOD,
+      communityName: 'Friendswood',
       balance: '7240',
       tier: 'established',
       exchangesThisWeek: 14,
@@ -1209,7 +2013,7 @@ async function seed() {
     {
       conversationId: CONV_LAUREN_MARIA,
       senderId: MARIA_ID,
-      content: 'Perfect, they will be warm and ready. I will text you my address on Cheshire. See you Saturday! ❤️',
+      content: 'Perfect, they will be warm and ready. I will text you my Friendswood pickup address. See you Saturday! ❤️',
       createdAt: daysAgo(5),
     },
   ])
@@ -1225,7 +2029,7 @@ async function seed() {
     {
       conversationId: CONV_LAUREN_PRIYA,
       senderId: PRIYA_ID,
-      content: 'Hi Lauren! I would love that. I have a morning slot open in two days — 9 to 10am at TC Jester Park. Sound good? I will bring an extra mat for you.',
+      content: 'Hi Lauren! I would love that. I have a morning slot open in two days — 9 to 10am at the Friendswood Park Pavilion. Sound good? I will bring an extra mat for you.',
       createdAt: daysAgo(2),
     },
     {
@@ -1247,7 +2051,7 @@ async function seed() {
     {
       conversationId: CONV_LAUREN_SARAH,
       senderId: SARAH_ID,
-      content: 'There is! Next Wednesday at 6pm, my kitchen on De Milo. Four spots total — you will be number three. Bring an apron and an appetite!',
+      content: 'There is! Next Wednesday at 6pm, my Friendswood kitchen. Four spots total — you will be number three. Bring an apron and an appetite!',
       createdAt: daysAgo(2),
     },
   ])
@@ -1310,16 +2114,25 @@ async function seed() {
   // ── Done ────────────────────────────────────────────────────────────────
   console.log('')
   console.log('Seed complete!')
+  console.log('  3 communities, 3 invite codes')
   console.log('  18 members')
+  console.log('  18 demo auth accounts')
+  console.log('  8 business profiles')
   console.log('  18 wallets')
   console.log('  38 listings')
+  console.log('  7 timed need windows')
+  console.log('  2 helper offers')
+  console.log('  5 helper preference rows')
+  console.log('  5 member intent profiles')
   console.log('  11 exchanges')
   console.log('  1 booking')
-  console.log('  40 availability slots')
+  console.log('  43 availability slots')
   console.log('  9 reviews')
   console.log('  22 reputation tags')
   console.log('  7 happenings')
   console.log('  37 RSVPs')
+  console.log('  6 notifications')
+  console.log('  20 analytics events')
   console.log('  18 activity feed items')
   console.log('  1 treasury')
   console.log('  3 conversations, 6 participants, 9 messages')

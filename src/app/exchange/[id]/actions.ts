@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { exchangeEngine } from '@/lib/exchange-engine'
+import type { CancellationInput } from '@/lib/exchange-engine'
 
 export async function completeExchangeAction(
   exchangeId: string,
@@ -60,13 +61,18 @@ export async function scheduleExchangeAction(
 
 export async function cancelExchangeAction(
   exchangeId: string,
+  input?: CancellationInput,
 ): Promise<{ success?: boolean; error?: string }> {
   try {
     await exchangeEngine.initialize()
-    await exchangeEngine.cancelExchange(exchangeId)
+    const exchange = await exchangeEngine.cancelExchange(exchangeId, input)
 
+    revalidatePath('/')
+    revalidatePath('/needs')
     revalidatePath(`/exchange/${exchangeId}`)
+    revalidatePath(`/listing/${exchange.listingId}`)
     revalidatePath('/exchanges')
+    revalidatePath('/notifications')
     return { success: true }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to cancel exchange'

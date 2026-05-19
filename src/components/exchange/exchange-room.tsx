@@ -17,6 +17,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { CANCELLATION_REASON_OPTIONS } from '@/lib/cancellation'
 import { Avatar, Badge, Button, Card, StatusStepper } from '@/components/ui'
 import type { Step } from '@/components/ui/status-stepper'
 import { MessageThread } from '@/components/messages/message-thread'
@@ -33,6 +34,7 @@ import {
 import type {
   ExchangeRoom as ExchangeRoomData,
   ExchangeStatus,
+  CancellationReason,
   Member,
   Message,
   ReputationTagType,
@@ -146,6 +148,10 @@ export function ExchangeRoom({ room }: ExchangeRoomProps) {
   )
   const [startTime, setStartTime] = useState(room.booking?.startTime ?? '09:00')
   const [endTime, setEndTime] = useState(room.booking?.endTime ?? '10:00')
+  const [isConfirmingCancel, setIsConfirmingCancel] = useState(false)
+  const [cancelReason, setCancelReason] =
+    useState<CancellationReason>('schedule_conflict')
+  const [cancelNote, setCancelNote] = useState('')
 
   const participants = useMemo(() => {
     const map = new Map<string, Member>()
@@ -303,7 +309,7 @@ export function ExchangeRoom({ room }: ExchangeRoomProps) {
             variant="secondary"
             className="w-full"
             isLoading={isPending && pendingAction === 'cancel'}
-            onClick={() => runAction('cancel', () => cancelExchangeAction(room.exchange.id))}
+            onClick={() => setIsConfirmingCancel(true)}
           >
             <XCircle size={16} />
             Cancel
@@ -321,6 +327,75 @@ export function ExchangeRoom({ room }: ExchangeRoomProps) {
           </Button>
         )}
       </div>
+
+      {room.can.cancel && isConfirmingCancel && (
+        <Card className="space-y-3 border-error/20 bg-error/5">
+          <div>
+            <h2 className="text-sm font-semibold text-heading">
+              Cancel exchange
+            </h2>
+            <p className="mt-1 text-xs leading-relaxed text-secondary">
+              Held credits return to the requester. If this came from a timed
+              need, the need lifecycle will update automatically.
+            </p>
+          </div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-muted">
+            Reason
+            <select
+              value={cancelReason}
+              onChange={(event) =>
+                setCancelReason(event.target.value as CancellationReason)
+              }
+              className="mt-1 h-10 w-full rounded-lg border border-border bg-page px-3 text-sm font-medium normal-case tracking-normal text-heading outline-none focus:ring-2 focus:ring-primary/20"
+            >
+              {CANCELLATION_REASON_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-muted">
+            Optional note
+            <textarea
+              value={cancelNote}
+              onChange={(event) => setCancelNote(event.target.value)}
+              rows={3}
+              maxLength={240}
+              className="mt-1 w-full resize-y rounded-lg border border-border bg-page px-3 py-2 text-sm normal-case tracking-normal text-body outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="Add context for the other member and steward review."
+            />
+          </label>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={isPending}
+              onClick={() => setIsConfirmingCancel(false)}
+            >
+              Keep exchange
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-error hover:bg-error/8"
+              isLoading={isPending && pendingAction === 'cancel'}
+              onClick={() =>
+                runAction('cancel', () =>
+                  cancelExchangeAction(room.exchange.id, {
+                    reason: cancelReason,
+                    note: cancelNote,
+                  }),
+                )
+              }
+            >
+              Confirm cancel
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <Card className="space-y-4">
         <div className="flex items-center justify-between gap-3">

@@ -4,22 +4,30 @@ import { useState, useCallback, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { RsvpButton } from '@/components/happenings/rsvp-button'
 import type { RsvpStatus } from '@/lib/exchange-engine'
-import { rsvpAction } from '../actions'
+import { clearRsvpAction, rsvpAction } from '../actions'
 
 interface HappeningDetailFooterProps {
   happeningId: string
+  initialStatus: RsvpStatus | null
 }
 
-export function HappeningDetailFooter({ happeningId }: HappeningDetailFooterProps) {
+export function HappeningDetailFooter({
+  happeningId,
+  initialStatus,
+}: HappeningDetailFooterProps) {
   const router = useRouter()
-  const [currentStatus, setCurrentStatus] = useState<RsvpStatus | null>(null)
+  const [currentStatus, setCurrentStatus] =
+    useState<RsvpStatus | null>(initialStatus)
   const [isPending, startTransition] = useTransition()
 
   const handleRsvp = useCallback(
     (status: RsvpStatus) => {
-      // Toggle off if already selected
       if (currentStatus === status) {
         setCurrentStatus(null)
+        startTransition(async () => {
+          await clearRsvpAction(happeningId)
+          router.refresh()
+        })
         return
       }
 
@@ -35,9 +43,8 @@ export function HappeningDetailFooter({ happeningId }: HappeningDetailFooterProp
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-40 bg-surface border-t border-border-light"
+      className="fixed inset-x-0 bottom-[calc(var(--xm-bottomnav-height)+env(safe-area-inset-bottom,0px))] z-40 border-t border-border-light bg-surface"
       style={{
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         boxShadow: '0 -4px 16px rgba(45, 42, 38, 0.06)',
       }}
     >

@@ -2,12 +2,16 @@ export const dynamic = 'force-dynamic'
 
 import { exchangeEngine } from '@/lib/exchange-engine/client'
 import { TrailProgress } from '@/components/onboarding/trail-progress'
+import { PreferenceCapture } from '@/components/onboarding/preference-capture'
 import { OnboardingTrailClient } from './trail-client'
 
 export default async function OnboardingPage() {
   await exchangeEngine.initialize()
   const member = await exchangeEngine.getCurrentMember()
-  const steps = await exchangeEngine.getOnboardingTrail(member.id)
+  const [steps, intentProfile] = await Promise.all([
+    exchangeEngine.getOnboardingTrail(member.id),
+    exchangeEngine.getMemberIntentProfile(member.id),
+  ])
 
   return (
     <div className="space-y-5">
@@ -22,6 +26,8 @@ export default async function OnboardingPage() {
 
       {/* Progress overview */}
       <TrailProgress steps={steps} />
+
+      <PreferenceCapture initialProfile={intentProfile} />
 
       {/* Step cards (client component for interactivity) */}
       <OnboardingTrailClient initialSteps={steps} />

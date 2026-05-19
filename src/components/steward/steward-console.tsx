@@ -1,18 +1,25 @@
 import Link from 'next/link'
 import {
   AlertTriangle,
+  BarChart3,
   CalendarX,
   CheckCircle2,
   CircleDollarSign,
+  ClipboardList,
   Flag,
   Handshake,
   HeartPulse,
+  ListChecks,
   Mail,
+  Route,
   ShieldCheck,
   Sparkles,
+  TrendingUp,
   UserCheck,
 } from 'lucide-react'
 import { Badge, Button, Card } from '@/components/ui'
+import { formatCancellationReason } from '@/lib/cancellation'
+import { formatCategory } from '@/lib/marketplace'
 import type {
   CommunityInvite,
   Exchange,
@@ -43,6 +50,27 @@ function formatDate(value: string | null): string {
 
 function fullName(member: Member): string {
   return `${member.firstName} ${member.lastName}`
+}
+
+function formatEventType(eventType: string): string {
+  return eventType
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function formatHappeningCategory(category: string): string {
+  const labels: Record<string, string> = {
+    exchange_event: 'Exchange events',
+    fitness: 'Wellness / yoga',
+    community: 'Volunteering',
+    social: 'Social mixers',
+    markets: 'Markets',
+    classes: 'Workshops',
+    food: 'Cooking / food',
+    kids: 'Kids & family',
+  }
+  return labels[category] ?? formatCategory(category)
 }
 
 function StatusBadge({ member }: { member: Member }) {
@@ -324,6 +352,373 @@ function MatchAssistSection({ assists }: { assists: StewardMatchAssist[] }) {
   )
 }
 
+function NeedAttentionRow({
+  listing,
+  tone,
+}: {
+  listing: Listing
+  tone: 'urgent' | 'open'
+}) {
+  return (
+    <div className="border-t border-border py-3 first:border-t-0 first:pt-0 last:pb-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Link
+            href={`/listing/${listing.id}`}
+            className="font-medium text-heading hover:text-primary"
+          >
+            {listing.title}
+          </Link>
+          <p className="mt-1 text-sm text-secondary">
+            {listing.member?.firstName ?? 'Member'} - {formatCategory(listing.category)}
+          </p>
+        </div>
+        <Badge variant={tone === 'urgent' ? 'accent' : 'outline'}>
+          {tone === 'urgent' ? 'Urgent' : 'No offers'}
+        </Badge>
+      </div>
+    </div>
+  )
+}
+
+function BetaOperationsSection({ dashboard }: { dashboard: StewardDashboard }) {
+  return (
+    <Card className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-heading">Beta Operations</h2>
+          <p className="text-sm text-secondary">
+            Needs most likely to require steward intervention before trust erodes.
+          </p>
+        </div>
+        <ClipboardList size={20} className="text-primary" />
+      </div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-heading">Urgent Needs</h3>
+          {dashboard.urgentNeeds.length === 0 ? (
+            <EmptyState>No urgent needs are open.</EmptyState>
+          ) : (
+            dashboard.urgentNeeds.map((listing) => (
+              <NeedAttentionRow key={listing.id} listing={listing} tone="urgent" />
+            ))
+          )}
+        </div>
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-heading">
+            Needs Without Offers
+          </h3>
+          {dashboard.needsWithoutOffers.length === 0 ? (
+            <EmptyState>Every open need has at least one offer.</EmptyState>
+          ) : (
+            dashboard.needsWithoutOffers.map((listing) => (
+              <NeedAttentionRow key={listing.id} listing={listing} tone="open" />
+            ))
+          )}
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function CancellationSignalsSection({ dashboard }: { dashboard: StewardDashboard }) {
+  return (
+    <Card className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-heading">
+            Cancellation Signals
+          </h2>
+          <p className="text-sm text-secondary">
+            Members with recent drops, withdrawals, or cancelled needs.
+          </p>
+        </div>
+        <AlertTriangle size={20} className="text-accent" />
+      </div>
+      {dashboard.cancellationSignals.length === 0 ? (
+        <EmptyState>No cancellation patterns captured yet.</EmptyState>
+      ) : (
+        <div className="divide-y divide-border">
+          {dashboard.cancellationSignals.map((signal) => (
+            <div
+              key={signal.member.id}
+              className="py-3 first:pt-0 last:pb-0"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Link
+                    href={`/member/${signal.member.id}`}
+                    className="font-medium text-heading hover:text-primary"
+                  >
+                    {fullName(signal.member)}
+                  </Link>
+                  <p className="mt-1 text-xs text-muted">
+                    Last reason: {formatCancellationReason(signal.lastReason)} -{' '}
+                    {formatDate(signal.lastAt)}
+                  </p>
+                </div>
+                <span className="rounded-full bg-hover px-2 py-1 text-sm font-semibold tabular-nums text-accent-dark">
+                  {signal.total}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium text-secondary">
+                <span className="rounded-full bg-hover px-2 py-1">
+                  {signal.helperDrops} helper drops
+                </span>
+                <span className="rounded-full bg-hover px-2 py-1">
+                  {signal.offerWithdrawals} offer withdrawals
+                </span>
+                <span className="rounded-full bg-hover px-2 py-1">
+                  {signal.requesterCancellations} requester cancels
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function DemandSupplySection({ dashboard }: { dashboard: StewardDashboard }) {
+  const maxCount = Math.max(
+    1,
+    ...dashboard.categorySignals.map((signal) =>
+      Math.max(signal.needs, signal.offers),
+    ),
+  )
+
+  return (
+    <Card className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-heading">Demand / Supply</h2>
+          <p className="text-sm text-secondary">
+            Category gaps between current needs and available offers.
+          </p>
+        </div>
+        <BarChart3 size={20} className="text-primary" />
+      </div>
+      {dashboard.categorySignals.length === 0 ? (
+        <EmptyState>No active needs or offers to compare.</EmptyState>
+      ) : (
+        <div className="space-y-4">
+          {dashboard.categorySignals.map((signal) => (
+            <div key={signal.category} className="space-y-2">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-medium text-heading">
+                  {formatCategory(signal.category)}
+                </span>
+                <span className="text-secondary">
+                  {signal.needs} needs / {signal.offers} offers
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="h-2 overflow-hidden rounded-full bg-hover">
+                  <div
+                    className="h-full rounded-full bg-accent"
+                    style={{ width: `${Math.max((signal.needs / maxCount) * 100, 4)}%` }}
+                  />
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-hover">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${Math.max((signal.offers / maxCount) * 100, 4)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function IntentSignalsSection({ dashboard }: { dashboard: StewardDashboard }) {
+  const maxCount = Math.max(
+    1,
+    ...dashboard.intentSignals.map((signal) =>
+      Math.max(signal.mayNeed, signal.canHelp),
+    ),
+  )
+
+  return (
+    <Card className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-heading">Intent Signals</h2>
+          <p className="text-sm text-secondary">
+            Latent demand from onboarding preferences before a need is posted.
+          </p>
+        </div>
+        <Route size={20} className="text-primary" />
+      </div>
+      {dashboard.intentSignals.length === 0 ? (
+        <EmptyState>No onboarding intent profiles yet.</EmptyState>
+      ) : (
+        <div className="space-y-4">
+          {dashboard.intentSignals.map((signal) => (
+            <div key={signal.category} className="space-y-2">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-medium text-heading">
+                  {formatCategory(signal.category)}
+                </span>
+                <span className="text-secondary">
+                  {signal.mayNeed} may need / {signal.canHelp} can help
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="h-2 overflow-hidden rounded-full bg-hover">
+                  <div
+                    className="h-full rounded-full bg-amber-500"
+                    style={{ width: `${Math.max((signal.mayNeed / maxCount) * 100, 4)}%` }}
+                  />
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-hover">
+                  <div
+                    className="h-full rounded-full bg-primary"
+                    style={{ width: `${Math.max((signal.canHelp / maxCount) * 100, 4)}%` }}
+                  />
+                </div>
+              </div>
+              {signal.gap > 0 && (
+                <p className="text-xs font-medium text-amber-700">
+                  {signal.gap} more possible needs than helpers
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function HappeningInterestSection({ dashboard }: { dashboard: StewardDashboard }) {
+  const maxCount = Math.max(
+    1,
+    ...dashboard.happeningInterestSignals.map(
+      (signal) => signal.interestedMembers,
+    ),
+  )
+
+  return (
+    <Card className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-heading">Happening Demand</h2>
+          <p className="text-sm text-secondary">
+            Event categories members selected during onboarding.
+          </p>
+        </div>
+        <Sparkles size={20} className="text-primary" />
+      </div>
+      {dashboard.happeningInterestSignals.length === 0 ? (
+        <EmptyState>No happening interests captured yet.</EmptyState>
+      ) : (
+        <div className="space-y-3">
+          {dashboard.happeningInterestSignals.map((signal) => (
+            <div key={signal.category} className="space-y-2">
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="font-medium text-heading">
+                  {formatHappeningCategory(signal.category)}
+                </span>
+                <span className="text-secondary">
+                  {signal.interestedMembers} interested
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-hover">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{
+                    width: `${Math.max(
+                      (signal.interestedMembers / maxCount) * 100,
+                      4,
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function ActivationFunnelSection({ dashboard }: { dashboard: StewardDashboard }) {
+  const maxCount = Math.max(
+    1,
+    ...dashboard.activationFunnel.map((metric) => metric.count),
+  )
+
+  return (
+    <Card className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-heading">Activation Funnel</h2>
+          <p className="text-sm text-secondary">
+            Whether members are moving from signup into useful exchange behavior.
+          </p>
+        </div>
+        <Route size={20} className="text-primary" />
+      </div>
+      <div className="space-y-3">
+        {dashboard.activationFunnel.map((metric) => (
+          <div key={metric.label} className="space-y-1">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="font-medium text-heading">{metric.label}</span>
+              <span className="tabular-nums text-secondary">{metric.count}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-hover">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${Math.max((metric.count / maxCount) * 100, 4)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
+function AnalyticsEventsSection({ dashboard }: { dashboard: StewardDashboard }) {
+  return (
+    <Card className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-heading">Analytics Events</h2>
+          <p className="text-sm text-secondary">
+            Recent beta signals captured from needs, offers, RSVPs, and fallback paths.
+          </p>
+        </div>
+        <TrendingUp size={20} className="text-primary" />
+      </div>
+      {dashboard.analyticsCounts.length === 0 ? (
+        <EmptyState>No analytics events captured yet.</EmptyState>
+      ) : (
+        <div className="divide-y divide-border">
+          {dashboard.analyticsCounts.map((event) => (
+            <div
+              key={event.eventType}
+              className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+            >
+              <span className="text-sm font-medium text-heading">
+                {formatEventType(event.eventType)}
+              </span>
+              <span className="rounded-full bg-hover px-2 py-1 text-sm font-semibold tabular-nums text-primary">
+                {event.count}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 function ListingCleanupRow({ listing }: { listing: Listing }) {
   return (
     <div className="border-t border-border py-4 first:border-t-0 first:pt-0 last:pb-0">
@@ -513,6 +908,8 @@ export function StewardConsole({ dashboard }: { dashboard: StewardDashboard }) {
           <MetricCard label="Active members" value={metrics.activeMembers} icon={UserCheck} />
           <MetricCard label="Open needs" value={metrics.activeNeeds} icon={Handshake} />
           <MetricCard label="Open offers" value={metrics.activeOffers} icon={Sparkles} />
+          <MetricCard label="Urgent needs" value={metrics.urgentNeeds} icon={AlertTriangle} />
+          <MetricCard label="No-offer needs" value={metrics.needsWithoutOffers} icon={ListChecks} />
           <MetricCard label="Active exchanges" value={metrics.activeExchanges} icon={CircleDollarSign} />
           <MetricCard label="Pending members" value={metrics.pendingMembers} icon={ShieldCheck} />
           <MetricCard label="Disputes" value={metrics.disputedExchanges} icon={AlertTriangle} />
@@ -521,6 +918,17 @@ export function StewardConsole({ dashboard }: { dashboard: StewardDashboard }) {
         </div>
       </section>
 
+      <BetaOperationsSection dashboard={dashboard} />
+      <CancellationSignalsSection dashboard={dashboard} />
+      <DemandSupplySection dashboard={dashboard} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <IntentSignalsSection dashboard={dashboard} />
+        <HappeningInterestSection dashboard={dashboard} />
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ActivationFunnelSection dashboard={dashboard} />
+        <AnalyticsEventsSection dashboard={dashboard} />
+      </div>
       <MemberReviewSection
         pendingMembers={dashboard.pendingMembers}
         pausedMembers={dashboard.pausedMembers}

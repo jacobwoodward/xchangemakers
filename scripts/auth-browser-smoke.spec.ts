@@ -7,7 +7,7 @@ const databaseUrl =
   process.env.DATABASE_URL ??
   'postgresql://xchangemakers:xchangemakers@localhost:5433/xchangemakers'
 
-test.use({ channel: 'chrome' })
+test.use({ channel: 'msedge' })
 
 async function cleanupMember(email: string) {
   const sql = postgres(databaseUrl, { max: 1 })
@@ -26,6 +26,10 @@ async function cleanupMember(email: string) {
     `
     await sql`DELETE FROM auth_accounts WHERE member_id = ${member.id}`
     await sql`DELETE FROM onboarding_progress WHERE member_id = ${member.id}`
+    await sql`DELETE FROM member_intent_profiles WHERE member_id = ${member.id}`
+    await sql`DELETE FROM helper_preferences WHERE member_id = ${member.id}`
+    await sql`DELETE FROM notifications WHERE member_id = ${member.id}`
+    await sql`DELETE FROM analytics_events WHERE member_id = ${member.id}`
     await sql`DELETE FROM wallets WHERE member_id = ${member.id}`
     await sql`DELETE FROM members WHERE id = ${member.id}`
   } finally {
@@ -37,12 +41,12 @@ test('signs in through the form', async ({ page }) => {
   await page.goto(`${baseUrl}/sign-in`)
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible()
 
-  await page.getByLabel('Email').fill('lauren@example.com')
+  await page.getByLabel('Email').fill('lauren.chen@email.com')
   await page.getByLabel('Password').fill('password')
   await page.getByRole('button', { name: /Sign In/i }).click()
 
   await page.waitForURL(`${baseUrl}/`)
-  await expect(page.getByText(/Oak Forest exchange network/i)).toBeVisible()
+  await expect(page.getByText(/Your Friendswood action queue/i)).toBeVisible()
 })
 
 test('creates an account through the signup form', async ({ page }) => {
@@ -57,7 +61,7 @@ test('creates an account through the signup form', async ({ page }) => {
     await page.getByLabel('Last Name').fill('Two')
     await page.getByLabel('Email').fill(email)
     await page.getByLabel('Password').fill('password123')
-    await page.getByLabel('Invite Code').fill('OAK-FOREST')
+    await page.getByLabel('Invite Code').fill('FRIENDSWOOD')
     await page.getByRole('button', { name: /Create Account/i }).click()
 
     await page.waitForURL(`${baseUrl}/onboarding`)
